@@ -1,4 +1,4 @@
-FROM python:3.9-bullseye
+FROM python:latest
 
 # Install xvfb - a virtual X display server for the GUI to display to
 RUN apt-get update && apt-get upgrade -y
