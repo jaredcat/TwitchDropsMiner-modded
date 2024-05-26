@@ -1547,6 +1547,12 @@ class SettingsPanel:
             checkboxes_frame, variable=self._vars["priority_only"], command=self.priority_only
         ).grid(column=1, row=irow, sticky="w")
         ttk.Label(
+            checkboxes_frame, text=_("gui", "settings", "general", "prioritze_end")
+        ).grid(column=0, row=(irow := irow + 1), sticky="e")
+        ttk.Checkbutton(
+            checkboxes_frame, variable=self._vars["prioritze_end"], command=self.prioritze_end
+        ).grid(column=1, row=irow, sticky="w")
+        ttk.Label(
             checkboxes_frame, text=_("gui", "settings", "general", "priority_by_ending_soonest")
         ).grid(column=0, row=(irow := irow + 1), sticky="e")
         ttk.Checkbutton(
@@ -2197,7 +2203,7 @@ def set_theme(root, manager, name):
                 popdown_window = combobox.tk.call("ttk::combobox::PopdownWindow", combobox)
                 listbox = f"{popdown_window}.f.l"
                 combobox.tk.call(listbox, "configure", flag, value)
-    
+
     # Style options, !!!"background" and "bg" is not interchangable for some reason!!!
     match name:
         case "dark":
@@ -2249,7 +2255,7 @@ def set_theme(root, manager, name):
             configure_combobox_list(manager.settings._exclude_entry, "-background", bg_grey)
             configure_combobox_list(manager.settings._exclude_entry, "-foreground", "white")
             configure_combobox_list(manager.settings._exclude_entry, "-selectbackground", active_grey)
-        
+
         case "light" | "default" | _ : # When creating a new theme, additional values might need to be set, so the default theme remains consistent
             # General
             style.theme_use(set_theme.default_style)
