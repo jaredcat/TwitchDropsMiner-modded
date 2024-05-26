@@ -5,7 +5,7 @@ maximum_age=300
 
 # Check if the timestamp file exists
 if [[ ! -f "$timestamp_file" ]]; then
-  echo "Timestamp file does not exist."
+  echo "Timestamp file does not exist"
   exit 1
 fi
 
@@ -20,7 +20,9 @@ difference=$((current_timestamp - last_timestamp))
 
 # Check if the difference is less than the maximum_age
 if [[ $difference -lt $maximum_age ]]; then
+  echo "Timestamp is valid"
   exit 0
 else
+  echo "Timestamp is outdated"
   exit 1
 fi
