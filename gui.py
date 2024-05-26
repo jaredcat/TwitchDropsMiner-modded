@@ -1547,12 +1547,6 @@ class SettingsPanel:
             checkboxes_frame, variable=self._vars["priority_only"], command=self.priority_only
         ).grid(column=1, row=irow, sticky="w")
         ttk.Label(
-            checkboxes_frame, text=_("gui", "settings", "general", "prioritze_end")
-        ).grid(column=0, row=(irow := irow + 1), sticky="e")
-        ttk.Checkbutton(
-            checkboxes_frame, variable=self._vars["prioritze_end"], command=self.prioritze_end
-        ).grid(column=1, row=irow, sticky="w")
-        ttk.Label(
             checkboxes_frame, text=_("gui", "settings", "general", "priority_by_ending_soonest")
         ).grid(column=0, row=(irow := irow + 1), sticky="e")
         ttk.Checkbutton(
