@@ -9,12 +9,14 @@ __pycache__
 /*.tmp
 /Twitch Drops Miner
 # Dev files
+/.idea
+/.vscode
 /env
 /venv
 /cache
 /*.jar
 log.txt
-/lock.file
+lock.file
 settings.json
 healthcheck.timestamp
 #/lang/English.json

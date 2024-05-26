@@ -1,6 +1,6 @@
 /.git
-/.vscode
 /.idea
+/.vscode
 /.mypy_cache
 /__pycache__
 /build
@@ -14,6 +14,7 @@
 /cache
 
 log.txt
+lock.file
 cookies.jar
 settings.json
 healthcheck.timestamp
