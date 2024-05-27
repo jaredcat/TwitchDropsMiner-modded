@@ -1027,6 +1027,8 @@ class Twitch:
                 else:
                     # not watching anything and there isn't anything to watch either
                     self.print(_("status", "no_channel"))
+                    with open('healthcheck.timestamp', 'w') as f:
+                        f.write(str(int(time())))
                     self.change_state(State.IDLE)
                 del new_watching, selected_channel, watching_channel
             elif self._state is State.EXIT:
@@ -1140,8 +1142,6 @@ class Twitch:
                 trigger_type = "Cleanup"
             else:
                 trigger_type = "Points"
-            with open('healthcheck.timestamp', 'w') as f:
-                f.write(str(int(next_trigger.timestamp())))
             logger.log(
                 CALL,
                 (
