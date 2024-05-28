@@ -20,7 +20,7 @@ class SettingsFile(TypedDict):
     exclude: set[str]
     priority: list[str]
     priority_only: bool
-    priority_by_ending_soonest: bool
+    prioritize_by_ending_soonest: bool
     unlinked_campaigns: bool
     autostart_tray: bool
     connection_quality: int
@@ -34,7 +34,7 @@ default_settings: SettingsFile = {
     "dark_theme": False,
     "autostart": False,
     "priority_only": True,
-    "priority_by_ending_soonest": False,
+    "prioritize_by_ending_soonest": False,
     "unlinked_campaigns": False,
     "autostart_tray": False,
     "connection_quality": 1,
@@ -60,7 +60,7 @@ class Settings:
     exclude: set[str]
     priority: list[str]
     priority_only: bool
-    priority_by_ending_soonest: bool
+    prioritize_by_ending_soonest: bool
     unlinked_campaigns: bool
     autostart_tray: bool
     connection_quality: int
@@ -75,8 +75,8 @@ class Settings:
         self._altered: bool = False
 
     def __get_settings_from_env__(self):
-        if(os.environ.get('PRIORITY_BY_ENDING_SOONEST') == '1'):
-            self._settings["priority_by_ending_soonest"] = True
+        if(os.environ.get('prioritize_by_ending_soonest') == '1'):
+            self._settings["prioritize_by_ending_soonest"] = True
         if(os.environ.get('UNLINKED_CAMPAIGNS') == '1'):
             self._settings["unlinked_campaigns"] = True
 

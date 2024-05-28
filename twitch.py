@@ -830,7 +830,7 @@ class Twitch:
                 # figure out which games we want
                 self.wanted_games.clear()
                 priorities = self.gui.settings.priorities()
-                priority_by_ending_soonest = self.settings.priority_by_ending_soonest
+                prioritize_by_ending_soonest = self.settings.prioritize_by_ending_soonest
                 campaigns = self.inventory
                 filtered_campaigns = list(filter(self.filter_campaigns, campaigns))
                 for i, campaign in enumerate(filtered_campaigns):
@@ -838,7 +838,7 @@ class Twitch:
                     # get users priority preference
                     game_priority = priorities.get(game.name, 0)
                     if (game_priority):
-                        if (priority_by_ending_soonest):
+                        if (prioritize_by_ending_soonest):
                            # list is sorted by end_at so this keeps them in order
                            self.wanted_games[game] = len(filtered_campaigns) - i
                         else:

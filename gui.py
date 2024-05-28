@@ -1459,7 +1459,7 @@ class _SettingsVars(TypedDict):
     dark_theme: IntVar
     autostart: IntVar
     priority_only: IntVar
-    priority_by_ending_soonest: IntVar
+    prioritize_by_ending_soonest: IntVar
     unlinked_campaigns: IntVar
     tray_notifications: IntVar
 
@@ -1480,7 +1480,7 @@ class SettingsPanel:
             "dark_theme": IntVar(master, self._settings.dark_theme),
             "autostart": IntVar(master, self._settings.autostart),
             "priority_only": IntVar(master, self._settings.priority_only),
-            "priority_by_ending_soonest": IntVar(master, self._settings.priority_by_ending_soonest),
+            "prioritize_by_ending_soonest": IntVar(master, self._settings.prioritize_by_ending_soonest),
             "unlinked_campaigns": IntVar(master, self._settings.unlinked_campaigns),
             "tray_notifications": IntVar(master, self._settings.tray_notifications),
         }
@@ -1547,10 +1547,10 @@ class SettingsPanel:
             checkboxes_frame, variable=self._vars["priority_only"], command=self.priority_only
         ).grid(column=1, row=irow, sticky="w")
         ttk.Label(
-            checkboxes_frame, text=_("gui", "settings", "general", "priority_by_ending_soonest")
+            checkboxes_frame, text=_("gui", "settings", "general", "prioritize_by_ending_soonest")
         ).grid(column=0, row=(irow := irow + 1), sticky="e")
         ttk.Checkbutton(
-            checkboxes_frame, variable=self._vars["priority_by_ending_soonest"], command=self.priority_by_ending_soonest
+            checkboxes_frame, variable=self._vars["prioritize_by_ending_soonest"], command=self.prioritize_by_ending_soonest
         ).grid(column=1, row=irow, sticky="w")
         ttk.Label(
             checkboxes_frame, text=_("gui", "settings", "general", "unlinked_campaigns")
@@ -1777,8 +1777,8 @@ class SettingsPanel:
     def priority_only(self) -> None:
         self._settings.priority_only = bool(self._vars["priority_only"].get())
 
-    def priority_by_ending_soonest(self) -> None:
-        self._settings.priority_by_ending_soonest = bool(self._vars["priority_by_ending_soonest"].get())
+    def prioritize_by_ending_soonest(self) -> None:
+        self._settings.prioritize_by_ending_soonest = bool(self._vars["prioritize_by_ending_soonest"].get())
     def unlinked_campaigns(self) -> None:
         self._settings.unlinked_campaigns = bool(self._vars["unlinked_campaigns"].get())
 
@@ -2412,7 +2412,7 @@ if __name__ == "__main__":
                 autostart=False,
                 language="English",
                 priority_only=False,
-                priority_by_ending_soonest=False,
+                prioritize_by_ending_soonest=False,
                 unlinked_campaigns=False,
                 autostart_tray=False,
                 exclude={"Lit Game"},
