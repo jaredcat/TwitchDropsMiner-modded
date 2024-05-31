@@ -17,7 +17,7 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=1m --retries=3 CMD ./heal
 
 ENV UNLINKED_CAMPAIGNS=1
 ENV prioritize_by_ending_soonest=0
-CMD ["python", "main.py", "-vvv"]
+CMD ["timeout", "15m", "python", "main.py", "-vvv"]
 
 # Example command to build:
 # docker build -t twitch_drops_miner .
