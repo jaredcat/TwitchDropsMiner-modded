@@ -2,7 +2,8 @@ FROM python:latest
 
 # Install xvfb - a virtual X display server for the GUI to display to
 RUN apt-get update && apt-get upgrade -y
-RUN apt-get install libgirepository1.0-dev xvfb -y
+RUN apt-get install -y libgirepository1.0-dev xvfb \
+    python3-gi gobject-introspection gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1
 
 COPY . /TwitchDropsMiner/
 WORKDIR /TwitchDropsMiner/
