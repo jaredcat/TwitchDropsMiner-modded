@@ -899,10 +899,11 @@ class Twitch:
                 # NOTE: we use another set so that we can set them online separately
                 no_acl: set[Game] = set()
                 acl_channels: OrderedSet[Channel] = OrderedSet()
+                next_hour = datetime.now(timezone.utc) + timedelta(hours=1)
                 for campaign in self.inventory:
                     if (
                         campaign.game in self.wanted_games
-                        and campaign.can_earn_within_next_hour()
+                        and campaign.can_earn_within(next_hour)
                     ):
                         if campaign.allowed_channels:
                             acl_channels.update(campaign.allowed_channels)
@@ -1114,7 +1115,7 @@ class Twitch:
                                 f"{drop.name} ({drop.campaign.game}, "
                                 f"{drop.current_minutes}/{drop.required_minutes})"
                             )
-                        logger.log(CALL, f"Drop progress from active search: {drop_text}")
+                            logger.log(CALL, f"Drop progress from active search: {drop_text}")
                     else:
                         logger.log(CALL, "No active drop could be determined")
             await self._watch_sleep(last_watch + interval - time())
@@ -1627,6 +1628,7 @@ class Twitch:
         priority_only = self.settings.priority_only
         unlinked_campaigns = self.settings.unlinked_campaigns
         game = campaign.game
+        next_hour = datetime.now(timezone.utc) + timedelta(hours=1)
         if (
             game not in self.wanted_games # isn't already there
             and game.name not in exclude # and isn't excluded
@@ -1635,7 +1637,7 @@ class Twitch:
             # and user wants unlinked games or the game is linked
             and (unlinked_campaigns or campaign.linked)
             # and can be progressed within the next hour
-            and campaign.can_earn_within_next_hour()
+            and campaign.can_earn_within(next_hour)
         ):
             return True
         return False
@@ -1687,12 +1689,13 @@ class Twitch:
         self.gui.inv.clear()
         self.inventory.clear()
         switch_triggers: set[datetime] = set()
+        next_hour = datetime.now(timezone.utc) + timedelta(hours=1)
         for i, campaign in enumerate(campaigns, start=1):
             status_update(
                 _("gui", "status", "adding_campaigns").format(counter=f"({i}/{len(campaigns)})")
             )
             self._drops.update({drop.id: drop for drop in campaign.drops})
-            if campaign.can_earn_within_next_hour():
+            if campaign.can_earn_within(next_hour):
                 switch_triggers.update(campaign.time_triggers)
             # NOTE: this fetches pictures from the CDN, so might be slow without a cache
             await self.gui.inv.add_campaign(campaign)

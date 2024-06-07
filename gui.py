@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from tkinter import Tk, ttk, StringVar, DoubleVar, IntVar
 from typing import Any, Union, Tuple, TypedDict, NoReturn, Generic, TYPE_CHECKING
 
+import pystray
 from yarl import URL
 from PIL.ImageTk import PhotoImage
 from PIL import Image as Image_module
@@ -1038,7 +1039,7 @@ class TrayIcon:
 
     def __init__(self, manager: GUIManager, master: ttk.Widget):
         self._manager = manager
-        self.icon = None
+        self.icon: pystray.Icon | None = None
         self.icon_image = Image_module.open(resource_path("pickaxe.ico"))
         self._button = ttk.Button(master, command=self.minimize, text=_("gui", "tray", "minimize"))
         self._button.grid(column=0, row=0, sticky="ne")
@@ -1051,12 +1052,32 @@ class TrayIcon:
         if drop is None:
             return self.TITLE
         campaign = drop.campaign
-        return (
+        title = (
             f"{self.TITLE}\n"
             f"{campaign.game.name}\n"
             f"{drop.rewards_text()} "
             f"{drop.progress:.1%} ({campaign.claimed_drops}/{campaign.total_drops})"
         )
+        if  len(title) > 127:        # ValueError: string too long (x, maximum length 128), but it only shows 127
+            min_length = 30
+            diff = len(title) - 127
+            if (len(drop.rewards_text()) - diff) >= min_length + 1:     # If we can trim the drop name to 20 chars
+                new_length = len(drop.rewards_text()) - diff - 1        # Length - Diff - Ellipsis (…)
+                title = (
+                    f"{self.TITLE}\n"
+                    f"{campaign.game.name}\n"
+                    f"{drop.rewards_text()[:new_length]}… "
+                    f"{drop.progress:.1%} ({campaign.claimed_drops}/{campaign.total_drops})"
+                )
+            else:                                                                                               # Trimming both
+                new_length = len(campaign.game.name) - (diff - len(drop.rewards_text()) + min_length + 1) - 1   # Campaign name - (Remaining diff from trimmed drop name) - Ellipsis
+                title = (
+                    f"{self.TITLE}\n"
+                    f"{campaign.game.name[:new_length]}…\n"
+                    f"{drop.rewards_text()[:min_length]}… "
+                    f"{drop.progress:.1%} ({campaign.claimed_drops}/{campaign.total_drops})"
+                )
+        return title
 
     def _start(self):
         loop = asyncio.get_running_loop()
@@ -1066,7 +1087,12 @@ class TrayIcon:
         def bridge(func):
             return lambda: loop.call_soon_threadsafe(func)
 
-        self.icon = None
+        menu = pystray.Menu(
+            pystray.MenuItem(_("gui", "tray", "show"), bridge(self.restore), default=True),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem(_("gui", "tray", "quit"), bridge(self.quit)),
+        )
+        self.icon = pystray.Icon("twitch_miner", self.icon_image, self.get_title(drop), menu)
         # self.icon.run_detached()
         loop.run_in_executor(None, self.icon.run)
 
@@ -1237,10 +1263,7 @@ class InventoryOverview:
         priority_only = self._settings.priority_only
         if (
             (not_linked or campaign.linked)
-            and (
-                campaign.active
-                or upcoming and campaign.upcoming
-                or expired and campaign.expired)
+            and (campaign.active or upcoming and campaign.upcoming or expired and campaign.expired)
             and (
                 excluded or (
                     campaign.game.name not in self._settings.exclude
@@ -1462,7 +1485,6 @@ class _SettingsVars(TypedDict):
     prioritize_by_ending_soonest: IntVar
     unlinked_campaigns: IntVar
     tray_notifications: IntVar
-
 
 
 class SettingsPanel:
@@ -1779,6 +1801,7 @@ class SettingsPanel:
 
     def prioritize_by_ending_soonest(self) -> None:
         self._settings.prioritize_by_ending_soonest = bool(self._vars["prioritize_by_ending_soonest"].get())
+
     def unlinked_campaigns(self) -> None:
         self._settings.unlinked_campaigns = bool(self._vars["unlinked_campaigns"].get())
 
@@ -2040,7 +2063,7 @@ class GUIManager:
         if self._twitch.settings.dark_theme:
             set_theme(root, self, "dark")
         else:
-            set_theme(root, self, "light")
+            set_theme(root, self, "default")    #
 
     # https://stackoverflow.com/questions/56329342/tkinter-treeview-background-tag-not-working
     def _fixed_map(self, option):
@@ -2199,92 +2222,91 @@ def set_theme(root, manager, name):
                 combobox.tk.call(listbox, "configure", flag, value)
 
     # Style options, !!!"background" and "bg" is not interchangable for some reason!!!
-    match name:
-        case "dark":
-            bg_grey = "#181818"
-            active_grey = "#2b2b2b"
-            # General
-            style.theme_use('alt')      # We have to switch the theme, because OS-defaults ("vista") don't support certain customisations, like Treeview-fieldbackground etc.
-            style.configure('.', background=bg_grey, foreground="white")
-            style.configure("Link.TLabel", font=link_font, foreground="#00aaff")
-            # Buttons
-            style.map("TButton",
-                      background=[("active", active_grey)])
-            # Tabs
-            style.configure("TNotebook.Tab", background=bg_grey)
-            style.map("TNotebook.Tab",
-                      background=[("selected", active_grey)])
-            # Checkboxes
-            style.configure("TCheckbutton", foreground="black") # The checkbox has to be white since it's an image, so the tick has to be black
-            style.map("TCheckbutton",
-                      background=[('active', active_grey)])
-            # Output field
-            manager.output._text.configure(bg=bg_grey, fg="white", selectbackground=active_grey)
-            # Include/Exclude lists
-            manager.settings._exclude_list.configure(bg=bg_grey, fg="white")
-            manager.settings._priority_list.configure(bg=bg_grey, fg="white")
-            # Channel list
-            style.configure('Treeview', background=bg_grey, fieldbackground=bg_grey)
-            manager.channels._table
-            # Inventory
-            manager.inv._canvas.configure(bg=bg_grey)
-            # Scroll bars
-            style.configure("TScrollbar", foreground="white", troughcolor=bg_grey, bordercolor=bg_grey,  arrowcolor="white")
-            style.map("TScrollbar",
-                      background=[("active", bg_grey), ("!active", bg_grey)])
-            # Language selection box _select_menu
-            manager.settings._select_menu.configure(bg=bg_grey, fg="white", activebackground=active_grey, activeforeground="white") # Couldn't figure out how to change the border, so it stays black
-            for index in range(manager.settings._select_menu.menu.index("end")+1):
-                 manager.settings._select_menu.menu.entryconfig(index, background=bg_grey, activebackground=active_grey, foreground="white")
-            # Proxy field
-            style.configure("TEntry", foreground="white", selectbackground=active_grey, fieldbackground=bg_grey)
-            # Include/Exclude box
-            style.configure("TCombobox", foreground="white", selectbackground=active_grey, fieldbackground=bg_grey, arrowcolor="white")
-            style.map("TCombobox", background=[("active", active_grey), ("disabled", bg_grey)])
-            # Include list
-            configure_combobox_list(manager.settings._priority_entry, "-background", bg_grey)
-            configure_combobox_list(manager.settings._priority_entry, "-foreground", "white")
-            configure_combobox_list(manager.settings._priority_entry, "-selectbackground", active_grey)
-            # Exclude list
-            configure_combobox_list(manager.settings._exclude_entry, "-background", bg_grey)
-            configure_combobox_list(manager.settings._exclude_entry, "-foreground", "white")
-            configure_combobox_list(manager.settings._exclude_entry, "-selectbackground", active_grey)
+    if name == "dark":
+        bg_grey = "#181818"
+        active_grey = "#2b2b2b"
+        # General
+        style.theme_use('alt')      # We have to switch the theme, because OS-defaults ("vista") don't support certain customisations, like Treeview-fieldbackground etc.
+        style.configure('.', background=bg_grey, foreground="white")
+        style.configure("Link.TLabel", font=link_font, foreground="#00aaff")
+        # Buttons
+        style.map("TButton",
+                  background=[("active", active_grey)])
+        # Tabs
+        style.configure("TNotebook.Tab", background=bg_grey)
+        style.map("TNotebook.Tab",
+                  background=[("selected", active_grey)])
+        # Checkboxes
+        style.configure("TCheckbutton", foreground="black") # The checkbox has to be white since it's an image, so the tick has to be black
+        style.map("TCheckbutton",
+                  background=[('active', active_grey)])
+        # Output field
+        manager.output._text.configure(bg=bg_grey, fg="white", selectbackground=active_grey)
+        # Include/Exclude lists
+        manager.settings._exclude_list.configure(bg=bg_grey, fg="white")
+        manager.settings._priority_list.configure(bg=bg_grey, fg="white")
+        # Channel list
+        style.configure('Treeview', background=bg_grey, fieldbackground=bg_grey)
+        manager.channels._table
+        # Inventory
+        manager.inv._canvas.configure(bg=bg_grey)
+        # Scroll bars
+        style.configure("TScrollbar", foreground="white", troughcolor=bg_grey, bordercolor=bg_grey,  arrowcolor="white")
+        style.map("TScrollbar",
+                  background=[("active", bg_grey), ("!active", bg_grey)])
+        # Language selection box _select_menu
+        manager.settings._select_menu.configure(bg=bg_grey, fg="white", activebackground=active_grey, activeforeground="white") # Couldn't figure out how to change the border, so it stays black
+        for index in range(manager.settings._select_menu.menu.index("end")+1):
+             manager.settings._select_menu.menu.entryconfig(index, background=bg_grey, activebackground=active_grey, foreground="white")
+        # Proxy field
+        style.configure("TEntry", foreground="white", selectbackground=active_grey, fieldbackground=bg_grey)
+        # Include/Exclude box
+        style.configure("TCombobox", foreground="white", selectbackground=active_grey, fieldbackground=bg_grey, arrowcolor="white")
+        style.map("TCombobox", background=[("active", active_grey), ("disabled", bg_grey)])
+        # Include list
+        configure_combobox_list(manager.settings._priority_entry, "-background", bg_grey)
+        configure_combobox_list(manager.settings._priority_entry, "-foreground", "white")
+        configure_combobox_list(manager.settings._priority_entry, "-selectbackground", active_grey)
+        # Exclude list
+        configure_combobox_list(manager.settings._exclude_entry, "-background", bg_grey)
+        configure_combobox_list(manager.settings._exclude_entry, "-foreground", "white")
+        configure_combobox_list(manager.settings._exclude_entry, "-selectbackground", active_grey)
 
-        case "light" | "default" | _ : # When creating a new theme, additional values might need to be set, so the default theme remains consistent
-            # General
-            style.theme_use(set_theme.default_style)
-            style.configure('.', background="#f0f0f0", foreground="#000000")
-            # Buttons
-            style.map("TButton",
-                      background=[("active", "#ffffff")])
-            # Tabs
-            style.configure("TNotebook.Tab", background="#f0f0f0")
-            style.map("TNotebook.Tab",
-                      background=[("selected", "#ffffff")])
-            # Checkboxes don't need to be reverted
-            # Output field
-            manager.output._text.configure(bg="#ffffff", fg="#000000")
-            # Include/Exclude lists
-            manager.settings._exclude_list.configure(bg="#ffffff", fg="#000000")
-            manager.settings._priority_list.configure(bg="#ffffff", fg="#000000")
-            # Channel list doesn't need to be reverted
-            # Inventory
-            manager.inv._canvas.configure(bg="#f0f0f0")
-            # Scroll bars don't need to be reverted
-            # Language selection box _select_menu
-            manager.settings._select_menu.configure(bg="#ffffff", fg="black", activebackground="#f0f0f0", activeforeground="black") # Couldn't figure out how to change the border, so it stays black
-            for index in range(manager.settings._select_menu.menu.index("end")+1):
-                 manager.settings._select_menu.menu.entryconfig(index, background="#f0f0f0", activebackground="#0078d7", foreground="black")
-            # Proxy field doesn't need to be reverted
-            # Include/Exclude dropdown - Only the lists have to be reverted
-            # Include list
-            configure_combobox_list(manager.settings._priority_entry, "-background", "white")
-            configure_combobox_list(manager.settings._priority_entry, "-foreground", "black")
-            configure_combobox_list(manager.settings._priority_entry, "-selectbackground", "#0078d7")
-            # Exclude list
-            configure_combobox_list(manager.settings._exclude_entry, "-background", "white")
-            configure_combobox_list(manager.settings._exclude_entry, "-foreground", "black")
-            configure_combobox_list(manager.settings._exclude_entry, "-selectbackground", "#0078d7")
+    else: # When creating a new theme, additional values might need to be set, so the default theme remains consistent
+        # General
+        style.theme_use(set_theme.default_style)
+        style.configure('.', background="#f0f0f0", foreground="#000000")
+        # Buttons
+        style.map("TButton",
+                  background=[("active", "#ffffff")])
+        # Tabs
+        style.configure("TNotebook.Tab", background="#f0f0f0")
+        style.map("TNotebook.Tab",
+                  background=[("selected", "#ffffff")])
+        # Checkboxes don't need to be reverted
+        # Output field
+        manager.output._text.configure(bg="#ffffff", fg="#000000")
+        # Include/Exclude lists
+        manager.settings._exclude_list.configure(bg="#ffffff", fg="#000000")
+        manager.settings._priority_list.configure(bg="#ffffff", fg="#000000")
+        # Channel list doesn't need to be reverted
+        # Inventory
+        manager.inv._canvas.configure(bg="#f0f0f0")
+        # Scroll bars don't need to be reverted
+        # Language selection box _select_menu
+        manager.settings._select_menu.configure(bg="#ffffff", fg="black", activebackground="#f0f0f0", activeforeground="black") # Couldn't figure out how to change the border, so it stays black
+        for index in range(manager.settings._select_menu.menu.index("end")+1):
+             manager.settings._select_menu.menu.entryconfig(index, background="#f0f0f0", activebackground="#0078d7", foreground="black")
+        # Proxy field doesn't need to be reverted
+        # Include/Exclude dropdown - Only the lists have to be reverted
+        # Include list
+        configure_combobox_list(manager.settings._priority_entry, "-background", "white")
+        configure_combobox_list(manager.settings._priority_entry, "-foreground", "black")
+        configure_combobox_list(manager.settings._priority_entry, "-selectbackground", "#0078d7")
+        # Exclude list
+        configure_combobox_list(manager.settings._exclude_entry, "-background", "white")
+        configure_combobox_list(manager.settings._exclude_entry, "-foreground", "black")
+        configure_combobox_list(manager.settings._exclude_entry, "-selectbackground", "#0078d7")
 
 
 ###################
