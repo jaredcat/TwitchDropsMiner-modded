@@ -244,8 +244,8 @@ def json_save(path: Path, contents: Mapping[Any, Any], *, sort: bool = False) ->
     try:
         with open(path, 'w', encoding="utf8") as file:
             json.dump(contents, file, default=_serialize, sort_keys=sort, indent=4)
-    except OSError:
-        logger.warning(f"Failed to save {path}")
+    except OSError as e:
+        logger.warning(f"Failed to save {path}: {e}")
 
 
 def webopen(url: str):
