@@ -238,7 +238,7 @@ jobs:
           artifactErrorsFailBuild: true
           artifacts: artifacts/*/*
           body: |
-            # ⚠️ Please help with translation as tracked in #2 and channel points as tracked in #23 !
+            # ⚠️ Please help with translation as tracked in #2 (العربية, Português, Indonesian) and channel points as tracked in #23 !
 
             ***
             **This is an automatically generated updated version of the application, that includes the latest master branch changes.**
@@ -251,7 +251,7 @@ jobs:
             ## Patch notes:
             ${{ steps.patch_notes.outputs.content }}
 
-          name: Updated tested build - ${{ steps.version.outputs.v-version }} (${{ steps.vars.outputs.sha_short }})
+          name: ${{ steps.version.outputs.v-version }} \- Updated tested build (${{ steps.vars.outputs.sha_short }})
           prerelease: false
           removeArtifacts: true
           tag: ${{ steps.version.outputs.v-version }}
