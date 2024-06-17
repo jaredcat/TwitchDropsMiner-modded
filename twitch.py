@@ -1687,6 +1687,8 @@ class Twitch:
         campaigns.sort(key=lambda c: c.active, reverse=True)
         campaigns.sort(key=lambda c: c.upcoming and c.starts_at or c.ends_at)
         campaigns.sort(key=lambda c: c.linked, reverse=True)
+        if (prioritize_by_ending_soonest):
+            campaigns.sort(key=lambda c: c.ends_at)
         self._drops.clear()
         self.gui.inv.clear()
         self.inventory.clear()
