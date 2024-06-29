@@ -65,7 +65,7 @@ class BaseDrop:
                     if (bid := benefit.id) in claimed_benefits
                 ]
             )
-            and all(self.starts_at <= dt < self.ends_at for dt in dts)
+            and all(dt < self.ends_at for dt in dts)
         ):
             self.is_claimed = True
         self._precondition_drops: list[str] = [d["id"] for d in (data["preconditionDrops"] or [])]
