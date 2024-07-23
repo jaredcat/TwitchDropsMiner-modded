@@ -1,3 +1,10 @@
+## v15.?.?
+
+23.7.2024
+- Updated `ViewerDropsDashboard` request to mitigate crashes if the old one become obsolete.
+
+
+
 ## v15.8.0
 
 22.7.2024
@@ -5,6 +12,8 @@
 
 16.7.2024
 - Updated **French** and **Indonesian** translation
+
+
 
 ## v15.7.1
 
