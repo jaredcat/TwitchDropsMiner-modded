@@ -1,7 +1,7 @@
 ## v15.?.?
 
 23.7.2024
-- Updated `ViewerDropsDashboard` request to mitigate crashes if the old one become obsolete.
+- Updated `ViewerDropsDashboard` request to mitigate crashes if the old one becomes obsolete.
 
 
 
