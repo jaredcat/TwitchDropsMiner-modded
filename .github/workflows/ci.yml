@@ -3,6 +3,7 @@ name: Build dev version
 on:
   push:
     branches:
+      - 'master'
       - 'in-dev'
   pull_request:
     branches:
