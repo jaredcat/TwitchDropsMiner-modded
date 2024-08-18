@@ -12,7 +12,7 @@ __pycache__
 /env
 /cache
 /*.jar
-log.txt
+/*log.txt
 /lock.file
 settings.json
 #/lang/English.json
