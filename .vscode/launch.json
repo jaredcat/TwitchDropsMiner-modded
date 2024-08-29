@@ -64,5 +64,14 @@
             "console": "integratedTerminal",
             "justMyCode": false
         },
+        {
+            "name": "Run App (DEBUG+GQL+WS+Log)",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "args": ["-vvv", "--debug-gql", "--debug-ws", "--log"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
     ]
 }
