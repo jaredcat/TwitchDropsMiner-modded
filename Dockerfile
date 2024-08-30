@@ -14,7 +14,7 @@ RUN pip install -r requirements.txt
 RUN chmod +x ./docker_entrypoint.sh
 ENTRYPOINT ["./docker_entrypoint.sh"]
 
-HEALTHCHECK --interval=10s --timeout=5s --start-period=5m --retries=3 CMD ./healthcheck.sh
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10m --retries=3 CMD ./healthcheck.sh
 
 ENV UNLINKED_CAMPAIGNS=1
 ENV prioritize_by_ending_soonest=0
