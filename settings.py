@@ -91,19 +91,19 @@ class Settings:
             self._settings["unlinked_campaigns"] = True
 
         # Migration: Convert old prioritize_by_ending_soonest to new priority_algorithm
-        if (
-            "prioritize_by_ending_soonest" in self._settings
-            and "priority_algorithm" not in self._settings
-        ):
-            if self._settings["prioritize_by_ending_soonest"]:
-                self._settings["priority_algorithm"] = PRIORITY_ALGORITHM_ENDING_SOONEST
+        if ("priority_algorithm" not in self._settings):
+            if (
+                "prioritize_by_ending_soonest" in self._settings
+            ):
+                if self._settings["prioritize_by_ending_soonest"]:
+                    self._settings["priority_algorithm"] = PRIORITY_ALGORITHM_ENDING_SOONEST
+                # Remove the old setting
+                del self._settings["prioritize_by_ending_soonest"]
+                self._altered = True
             else:
                 self._settings["priority_algorithm"] = (
                     PRIORITY_ALGORITHM_LIST  # Default to ordered list for existing users
                 )
-            # Remove the old setting
-            del self._settings["prioritize_by_ending_soonest"]
-            self._altered = True
 
     # default logic of reading settings is to check args first, then the settings file
     def __getattr__(self, name: str, /) -> Any:
