@@ -2354,42 +2354,58 @@ class SettingsPanel:
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
-        print("Steam sort by playtime clicked")
+        print("=== Steam sort by playtime clicked ===")
+        print(f"API Key present: {bool(self._settings.steam_api_key)}")
+        print(f"Steam ID present: {bool(self._settings.steam_id)}")
+        print(f"Priority list length: {len(self._settings.priority)}")
         self._run_steam_sort("playtime")
 
     def _steam_sort_by_release_date(self):
         """Sort priority list by Steam release date."""
-        print("Steam sort by release date clicked")
+        print("=== Steam sort by release date clicked ===")
+        print(f"API Key present: {bool(self._settings.steam_api_key)}")
+        print(f"Steam ID present: {bool(self._settings.steam_id)}")
+        print(f"Priority list length: {len(self._settings.priority)}")
         self._run_steam_sort("release_date")
 
     def _steam_sort_by_rating(self):
         """Sort priority list by Steam rating."""
-        print("Steam sort by rating clicked")
+        print("=== Steam sort by rating clicked ===")
+        print(f"API Key present: {bool(self._settings.steam_api_key)}")
+        print(f"Steam ID present: {bool(self._settings.steam_id)}")
+        print(f"Priority list length: {len(self._settings.priority)}")
         self._run_steam_sort("rating")
 
     def _run_steam_sort(self, sort_type: str):
         """Run Steam sorting in a way that works with Tkinter."""
         import asyncio
+        import threading
 
-        # Get the current event loop
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # No event loop running, create a new one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        # Schedule the coroutine to run
-        task = loop.create_task(self._steam_sort_games(sort_type))
-
-        # Add error handling
-        def handle_task_done(task):
+        def run_async_sort():
+            """Run the async sorting in a separate thread."""
+            print(f"Starting async sort thread for {sort_type}")
             try:
-                task.result()
-            except Exception as e:
-                print(f"Steam sort task failed: {e}")
+                # Create a new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                print("Event loop created")
 
-        task.add_done_callback(handle_task_done)
+                # Run the async function
+                print("Running steam_sort_games...")
+                loop.run_until_complete(self._steam_sort_games(sort_type))
+                print("Steam sort completed successfully")
+
+            except Exception as e:
+                print(f"Steam sort error: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                print("Closing event loop")
+                loop.close()
+
+        # Run in a separate thread to avoid blocking the GUI
+        thread = threading.Thread(target=run_async_sort, daemon=True)
+        thread.start()
 
 
 class HelpTab:
