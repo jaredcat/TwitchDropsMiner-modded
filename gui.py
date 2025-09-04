@@ -1660,7 +1660,10 @@ class SettingsPanel:
             textvariable=self._vars["steam_api_key"],
             placeholder=_("gui", "settings", "general", "steam_api", "api_key_placeholder"),
         )
-        self._steam_api_key.config(validatecommand=partial(self._steam_api_key_validate, self._steam_api_key))
+        self._steam_api_key.config(
+            validate="focusout",
+            validatecommand=partial(self._steam_api_key_validate, self._steam_api_key)
+        )
         self._steam_api_key.grid(column=0, row=1)
         # Steam ID frame
         steam_id_frame = ttk.Frame(center_frame2)
@@ -1672,7 +1675,10 @@ class SettingsPanel:
             textvariable=self._vars["steam_id"],
             placeholder=_("gui", "settings", "general", "steam_api", "id_placeholder"),
         )
-        self._steam_id.config(validatecommand=partial(self._steam_id_validate, self._steam_id))
+        self._steam_id.config(
+            validate="focusout",
+            validatecommand=partial(self._steam_id_validate, self._steam_id)
+        )
         self._steam_id.grid(column=0, row=1)
         # Add help text for Steam ID
         help_text = ttk.Label(
@@ -1682,6 +1688,9 @@ class SettingsPanel:
             foreground="gray"
         )
         help_text.grid(column=0, row=2, pady=(2, 0))
+
+        # Initialize button states based on current settings
+        self._update_steam_button_states()
         # Priority section - with width constraint
         priority_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "priority")
@@ -1698,10 +1707,7 @@ class SettingsPanel:
 
         # Steam sorting buttons frame
         steam_sorting_frame = ttk.Frame(priority_frame)
-        steam_sorting_frame.grid(column=0, row=1, columnspan=2, sticky="ew", pady=(5, 0))
-        steam_sorting_frame.columnconfigure(0, weight=1)
-        steam_sorting_frame.columnconfigure(1, weight=1)
-        steam_sorting_frame.columnconfigure(2, weight=1)
+        steam_sorting_frame.grid(column=0, row=1, columnspan=2, sticky="ew")
 
         self._steam_sort_playtime = ttk.Button(
             steam_sorting_frame,
@@ -1709,7 +1715,7 @@ class SettingsPanel:
             command=self._steam_sort_by_playtime,
             state="disabled"
         )
-        self._steam_sort_playtime.grid(column=0, row=0, padx=2, sticky="ew")
+        self._steam_sort_playtime.grid(column=0, row=0, padx=1)
 
         self._steam_sort_release = ttk.Button(
             steam_sorting_frame,
@@ -1717,7 +1723,7 @@ class SettingsPanel:
             command=self._steam_sort_by_release_date,
             state="disabled"
         )
-        self._steam_sort_release.grid(column=1, row=0, padx=2, sticky="ew")
+        self._steam_sort_release.grid(column=1, row=0, padx=1)
 
         self._steam_sort_rating = ttk.Button(
             steam_sorting_frame,
@@ -1725,7 +1731,7 @@ class SettingsPanel:
             command=self._steam_sort_by_rating,
             state="disabled"
         )
-        self._steam_sort_rating.grid(column=2, row=0, padx=2, sticky="ew")
+        self._steam_sort_rating.grid(column=2, row=0, padx=1)
 
         self._priority_list = PaddedListbox(
             priority_frame,
@@ -2247,6 +2253,9 @@ class SettingsPanel:
         # Both API key and Steam ID are required
         state = "normal" if (has_api_key and has_steam_id) else "disabled"
 
+        # Debug output
+        print(f"Steam button state update: API key={has_api_key}, Steam ID={has_steam_id}, State={state}")
+
         self._steam_sort_playtime.config(state=state)
         self._steam_sort_release.config(state=state)
         self._steam_sort_rating.config(state=state)
@@ -2323,16 +2332,19 @@ class SettingsPanel:
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
+        print("Steam sort by playtime clicked")
         import asyncio
         asyncio.create_task(self._steam_sort_games("playtime"))
 
     def _steam_sort_by_release_date(self):
         """Sort priority list by Steam release date."""
+        print("Steam sort by release date clicked")
         import asyncio
         asyncio.create_task(self._steam_sort_games("release_date"))
 
     def _steam_sort_by_rating(self):
         """Sort priority list by Steam rating."""
+        print("Steam sort by rating clicked")
         import asyncio
         asyncio.create_task(self._steam_sort_games("rating"))
 
