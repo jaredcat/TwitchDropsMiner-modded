@@ -553,7 +553,7 @@ class LoginForm:
         self._manager.grab_attention(sound=False)
         self._manager.print(_("gui", "login", "request"))
         await self.wait_for_login_press()
-        self._manager.print(f"Enter this code on the Twitch's device activation page: {user_code}")
+        self._manager.print(f"{_('gui', 'login', 'device_activation_code')} {user_code}")
         webopen("https://www.twitch.tv/activate")
 
     def update(self, status: str, user_id: int | None):
@@ -2273,15 +2273,20 @@ class SettingsPanel:
     async def _steam_sort_games(self, sort_type: str):
         """Generic Steam sorting function."""
         if not self._settings.steam_api_key or not self._settings.steam_id:
+            print("Steam API key or Steam ID missing")
             return
 
+        steam_client = None
         try:
             from steam_api import SteamAPIClient, SteamAPIError
 
             # Get current priority list
             current_priority = list(self._settings.priority)
             if not current_priority:
+                print("No games in priority list to sort")
                 return
+
+            print(f"Starting Steam sort by {sort_type} for {len(current_priority)} games")
 
             # Create Steam API client
             steam_client = SteamAPIClient(self._settings.steam_api_key)
@@ -2290,7 +2295,9 @@ class SettingsPanel:
             steam_id = self._settings.steam_id.strip()
 
             # Get user's games data
+            print(f"Fetching Steam data for user {steam_id}")
             games_data = await steam_client.get_user_games_data(steam_id)
+            print(f"Retrieved {len(games_data)} games from Steam")
 
             # Create a mapping of game names to Steam data
             steam_games_map = {game.name.lower(): game for game in games_data}
@@ -2321,6 +2328,7 @@ class SettingsPanel:
 
             # Sort the priority list
             sorted_priority = sorted(current_priority, key=get_sort_key)
+            print(f"Sorted priority list: {sorted_priority}")
 
             # Update the settings and GUI
             self._settings.priority = sorted_priority
@@ -2330,30 +2338,58 @@ class SettingsPanel:
             self._priority_list.delete(0, "end")
             self._priority_list.insert("end", *sorted_priority)
 
-            # Note: We don't close the client here as it's created fresh each time
-            # In a production app, you'd want to manage the client lifecycle better
+            print(f"Successfully sorted by {sort_type}")
 
-        except ImportError:
-            # Handle case where steam_api module is not available
-            pass
+        except ImportError as e:
+            print(f"Steam API module not available: {e}")
         except Exception as e:
-            # Handle other errors gracefully
             print(f"Steam sorting error: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            # Always close the client to prevent resource warnings
+            if steam_client:
+                await steam_client.close()
+                print("Steam client closed")
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
-        import asyncio
-        asyncio.create_task(self._steam_sort_games("playtime"))
+        print("Steam sort by playtime clicked")
+        self._run_steam_sort("playtime")
 
     def _steam_sort_by_release_date(self):
         """Sort priority list by Steam release date."""
-        import asyncio
-        asyncio.create_task(self._steam_sort_games("release_date"))
+        print("Steam sort by release date clicked")
+        self._run_steam_sort("release_date")
 
     def _steam_sort_by_rating(self):
         """Sort priority list by Steam rating."""
+        print("Steam sort by rating clicked")
+        self._run_steam_sort("rating")
+
+    def _run_steam_sort(self, sort_type: str):
+        """Run Steam sorting in a way that works with Tkinter."""
         import asyncio
-        asyncio.create_task(self._steam_sort_games("rating"))
+
+        # Get the current event loop
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No event loop running, create a new one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        # Schedule the coroutine to run
+        task = loop.create_task(self._steam_sort_games(sort_type))
+
+        # Add error handling
+        def handle_task_done(task):
+            try:
+                task.result()
+            except Exception as e:
+                print(f"Steam sort task failed: {e}")
+
+        task.add_done_callback(handle_task_done)
 
 
 class HelpTab:
