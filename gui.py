@@ -2350,7 +2350,7 @@ class SettingsPanel:
             traceback.print_exc()
 
     async def _simple_sort_by_release_date(self):
-        """Sort by release date using cached Steam data."""
+        """Sort by release date using cached Steam data, fetching from API if needed."""
         print("Starting release date sort...")
         current_priority = list(self._settings.priority)
         if not current_priority:
@@ -2368,12 +2368,64 @@ class SettingsPanel:
             print(f"Loaded Steam data with {len(steam_data)} cache entries")
         except Exception as e:
             print(f"Failed to load Steam data: {e}")
-            # If no Steam data, fall back to alphabetical
-            sorted_priority = sorted(current_priority, key=str.lower)
-            self._update_priority_list_safely(sorted_priority)
+            steam_data = {}
+
+        # If no cached data and we have Steam credentials, fetch from API
+        if not steam_data and self._settings.steam_api_key and self._settings.steam_id:
+            print("No cached Steam data found, fetching from Steam API...")
+            try:
+                from steam_api import SteamAPIClient, SteamAPIError
+
+                async with SteamAPIClient(self._settings.steam_api_key) as steam_client:
+                    # Get user's games data - only for priority list games
+                    print(f"Fetching Steam data for user {self._settings.steam_id}")
+                    games_data = await steam_client.get_user_games_data(self._settings.steam_id, current_priority)
+                    print(f"Retrieved {len(games_data)} games from Steam")
+
+                    # Create a mapping of game names to Steam data
+                    steam_games_map = {game.name.lower(): game for game in games_data}
+
+                    # Sort the priority list based on Steam release date
+                    def get_release_date_sort_key(game_name: str):
+                        steam_game = steam_games_map.get(game_name.lower())
+                        if not steam_game or not steam_game.release_date:
+                            # Games without Steam data or release date go to end, sorted alphabetically
+                            return (1, game_name.lower())
+
+                        try:
+                            # Parse Steam date format: "DD MMM, YYYY" or "MMM DD, YYYY"
+                            from datetime import datetime
+                            try:
+                                date_obj = datetime.strptime(steam_game.release_date, "%d %b, %Y")
+                            except ValueError:
+                                date_obj = datetime.strptime(steam_game.release_date, "%b %d, %Y")
+                            return (0, date_obj)  # Has date = sort by date (oldest first)
+                        except ValueError:
+                            return (1, game_name.lower())  # Invalid date = end of list
+
+                    # Sort the priority list
+                    sorted_priority = sorted(current_priority, key=get_release_date_sort_key)
+                    print(f"Sorted by release date: {sorted_priority[:5]}...")  # Show first 5 games
+
+                    self._update_priority_list_safely(sorted_priority)
+                    return
+
+            except ImportError as e:
+                print(f"Steam API module not available: {e}")
+                # Don't change the order - preserve user's work
+            except Exception as e:
+                print(f"Steam API error: {e}")
+                import traceback
+                traceback.print_exc()
+                # Don't change the order - preserve user's work
+
+        # Fallback: use cached data or keep original order
+        if not steam_data:
+            print("No Steam data available - keeping original priority order")
+            # Don't change the order at all - preserve user's work
             return
 
-        # Create a mapping of game names to release dates
+        # Create a mapping of game names to release dates from cache
         game_release_dates = {}
         for cache_key, cache_entry in steam_data.items():
             if isinstance(cache_entry, dict) and "data" in cache_entry:
@@ -2413,48 +2465,58 @@ class SettingsPanel:
         self._update_priority_list_safely(sorted_priority)
 
     async def _simple_sort_by_rating(self):
-        """Sort by rating using cached Steam data."""
-        # Do not log here; background thread logging can break Tk
+        """Sort by rating using Steam API data."""
+        print("Starting rating sort...")
         current_priority = list(self._settings.priority)
         if not current_priority:
+            print("No games in priority list")
             return
 
-        # Load Steam data from cache
-        steam_data = {}
+        print(f"Sorting {len(current_priority)} games by rating")
+
+        # Check if we have Steam credentials
+        if not self._settings.steam_api_key or not self._settings.steam_id:
+            print("Steam API key or Steam ID missing - keeping original priority order")
+            # Don't change the order at all - preserve user's work
+            return
+
         try:
-            from utils import json_load
-            from constants import STEAM_CACHE_DB
-            steam_data = json_load(STEAM_CACHE_DB, {})
-        except Exception:
-            # If no Steam data, fall back to alphabetical
-            sorted_priority = sorted(current_priority, key=str.lower)
-            self._update_priority_list_safely(sorted_priority)
-            return
+            from steam_api import SteamAPIClient, SteamAPIError
 
-        # Create a mapping of game names to ratings
-        game_ratings = {}
-        for cache_key, cache_entry in steam_data.items():
-            if isinstance(cache_entry, dict) and "data" in cache_entry:
-                data = cache_entry["data"]
-                if isinstance(data, list):
-                    for game_data in data:
-                        if isinstance(game_data, dict) and "name" in game_data and "rating" in game_data:
-                            game_name = game_data["name"]
-                            rating = game_data.get("rating")
-                            if rating is not None:
-                                game_ratings[game_name.lower()] = float(rating)
+            # Use context manager for proper resource cleanup
+            async with SteamAPIClient(self._settings.steam_api_key) as steam_client:
+                # Get user's games data - only for priority list games
+                print(f"Fetching Steam data for user {self._settings.steam_id}")
+                games_data = await steam_client.get_user_games_data(self._settings.steam_id, current_priority)
+                print(f"Retrieved {len(games_data)} games from Steam")
 
-        # Sort by rating (highest first), with games without ratings at the end
-        def get_sort_key(game_name):
-            rating = game_ratings.get(game_name.lower())
-            if rating is None:
-                return (1, game_name.lower())  # No rating = end of list
-            return (0, -rating)  # Has rating = sort by rating (negative for descending)
+                # Create a mapping of game names to Steam data
+                steam_games_map = {game.name.lower(): game for game in games_data}
 
-        sorted_priority = sorted(current_priority, key=get_sort_key)
+                # Sort the priority list based on Steam rating
+                def get_rating_sort_key(game_name: str):
+                    steam_game = steam_games_map.get(game_name.lower())
+                    if not steam_game or steam_game.rating is None:
+                        # Games without Steam data or rating go to end, sorted alphabetically
+                        return (1, game_name.lower())
 
-        # Persist and request GUI update
-        self._update_priority_list_safely(sorted_priority)
+                    # Higher rating first, then alphabetical
+                    return (0, -steam_game.rating, game_name.lower())
+
+                # Sort the priority list
+                sorted_priority = sorted(current_priority, key=get_rating_sort_key)
+                print(f"Sorted by rating: {sorted_priority[:5]}...")  # Show first 5 games
+
+                self._update_priority_list_safely(sorted_priority)
+
+        except ImportError as e:
+            print(f"Steam API module not available: {e}")
+            # Don't change the order - preserve user's work
+        except Exception as e:
+            print(f"Steam rating sorting error: {e}")
+            import traceback
+            traceback.print_exc()
+            # Don't change the order - preserve user's work
 
     def _update_priority_list_safely(self, sorted_priority: list[str]):
         """Safely update the priority list and GUI from any thread."""
