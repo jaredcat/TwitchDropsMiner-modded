@@ -2420,7 +2420,10 @@ class SettingsPanel:
         logger.info("Setting flag for GUI update on next poll cycle...")
         print("Setting flag for GUI update on next poll cycle...")
         self._priority_needs_refresh = True
-        logger.info(f"Flag set: _priority_needs_refresh = {self._priority_needs_refresh}")
+        # Also set flag on manager.settings so the GUI poll loop can find it
+        self._manager.settings._priority_needs_refresh = True
+        logger.info(f"Flag set on SettingsPanel: _priority_needs_refresh = {self._priority_needs_refresh}")
+        logger.info(f"Flag set on Manager.settings: _priority_needs_refresh = {self._manager.settings._priority_needs_refresh}")
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
