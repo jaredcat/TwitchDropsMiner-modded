@@ -1534,6 +1534,7 @@ class SettingsPanel:
         center_frame = ttk.Frame(master)
         center_frame.grid(column=0, row=0, sticky="nsew")
         center_frame.rowconfigure(0, weight=1)
+        # Simple equal column layout
         center_frame.columnconfigure(0, weight=1)
         center_frame.columnconfigure(1, weight=1)
         center_frame.columnconfigure(2, weight=1)
@@ -1645,7 +1646,7 @@ class SettingsPanel:
         )
         self._proxy.config(validatecommand=partial(proxy_validate, self._proxy, self._settings))
         self._proxy.grid(column=0, row=1)
-        # Priority section
+        # Priority section - with width constraint
         priority_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "priority")
         )
@@ -1670,11 +1671,18 @@ class SettingsPanel:
         self._priority_list.grid(column=0, row=1, rowspan=3, sticky="nsew")
         self._priority_list.insert("end", *self._settings.priority)
 
-        # Add drag and drop functionality
-        self._drag_data = {"item": None, "index": None}
+        # Add drag and drop functionality with visual feedback
+        self._drag_data = {"item": None, "index": None, "dragging": False}
         self._priority_list.bind("<Button-1>", self._on_priority_drag_start)
         self._priority_list.bind("<B1-Motion>", self._on_priority_drag_motion)
         self._priority_list.bind("<ButtonRelease-1>", self._on_priority_drag_release)
+        self._priority_list.bind("<Leave>", self._on_priority_drag_leave)
+
+        # Add a label for drag feedback (initially hidden)
+        self._drag_feedback_label = ttk.Label(priority_frame, text="",
+                                            foreground="blue", font=("TkDefaultFont", 9, "italic"))
+        self._drag_feedback_label.grid(column=0, row=4, columnspan=2, sticky="ew")
+        self._drag_feedback_label.grid_remove()  # Hide initially
 
         # Add right-click context menu
         self._priority_menu = tk.Menu(self._priority_list, tearoff=0)
@@ -1703,7 +1711,7 @@ class SettingsPanel:
             priority_frame, text="❌", command=self.priority_delete, width=2, style="Large.TButton"
         ).grid(column=1, row=3, sticky="ns")
         priority_frame.rowconfigure(3, weight=1)
-        # Exclude section
+        # Exclude section - with width constraint
         exclude_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "exclude")
         )
@@ -1870,9 +1878,11 @@ class SettingsPanel:
         return selection[0]
 
     def priority_move(self, up: bool) -> None:
-        idx: int | None = self._priority_idx()
-        if idx is None:
+        current_selection = list(self._priority_list.curselection())
+        if not current_selection:
             return
+
+        idx = current_selection[0]
         if up and idx == 0 or not up and idx == self._priority_list.size() - 1:
             return
         swap_idx: int = idx - 1 if up else idx + 1
@@ -1887,11 +1897,15 @@ class SettingsPanel:
         self._settings.alter()
 
     def priority_delete(self) -> None:
-        idx: int | None = self._priority_idx()
-        if idx is None:
+        current_selection = list(self._priority_list.curselection())
+        if not current_selection:
             return
-        self._priority_list.delete(idx)
-        del self._settings.priority[idx]
+
+        idx = current_selection[0]
+        if idx < len(self._settings.priority):
+            self._priority_list.delete(idx)
+            del self._settings.priority[idx]
+
         self._settings.alter()
         # Update dropdown options to reflect the change
         self._update_dropdown_options()
@@ -1951,42 +1965,90 @@ class SettingsPanel:
             # Update dropdown options to reflect the change
             self._update_dropdown_options()
 
-    # Drag and drop methods for priority list
+    # Drag and drop methods for priority list with enhanced visual feedback
     def _on_priority_drag_start(self, event):
         """Start drag operation - record the item being dragged."""
         widget = event.widget
-        index = widget.nearest(event.y)
-        if index < widget.size():
-            self._drag_data["index"] = index
-            self._drag_data["item"] = widget.get(index)
+        clicked_index = widget.nearest(event.y)
+
+        if clicked_index < widget.size():
+            # Select the clicked item
             widget.selection_clear(0, "end")
-            widget.selection_set(index)
+            widget.selection_set(clicked_index)
+
+            # Store drag data for the single item
+            self._drag_data["index"] = clicked_index
+            self._drag_data["item"] = widget.get(clicked_index)
+            self._drag_data["dragging"] = False
+
+            # Configure drag source appearance
+            widget.configure(cursor="hand2")
+
 
     def _on_priority_drag_motion(self, event):
-        """Handle drag motion - provide visual feedback."""
+        """Handle drag motion - provide rich visual feedback."""
         widget = event.widget
-        index = widget.nearest(event.y)
-        if index < widget.size() and self._drag_data["item"] is not None:
-            # Clear previous selection and show current drop target
+        current_index = widget.nearest(event.y)
+
+        # Only handle motion if we have drag data
+        if self._drag_data["item"]:
+            # Mark that we're actively dragging
+            if not self._drag_data["dragging"]:
+                self._drag_data["dragging"] = True
+                widget.configure(cursor="exchange")
+                # Show drag feedback
+                feedback_text = f"📦 Dragging: {self._drag_data['item']}"
+                self._drag_feedback_label.config(text=feedback_text)
+                self._drag_feedback_label.grid()
+
+            # Clear all previous selections and highlights
             widget.selection_clear(0, "end")
-            widget.selection_set(index)
+
+            # Highlight the source item being dragged
+            widget.selection_set(self._drag_data["index"])
+
+            # Highlight the current drop target position if it's different from source
+            if current_index < widget.size() and current_index != self._drag_data["index"]:
+                widget.selection_set(current_index)
 
     def _on_priority_drag_release(self, event):
-        """Complete drag operation - move the item to new position."""
+        """Complete drag operation - move the items to new position."""
         widget = event.widget
         drop_index = widget.nearest(event.y)
-        drag_index = self._drag_data["index"]
 
-        if (self._drag_data["item"] is not None and
-            drag_index is not None and
+        # Reset cursor
+        widget.configure(cursor="")
+
+        # Only move if we were actually dragging and it's a valid move
+        if (self._drag_data["dragging"] and
+            self._drag_data["item"] and
             drop_index < widget.size() and
-            drag_index != drop_index):
+            drop_index != self._drag_data["index"]):
 
-            # Perform the move operation
-            self._priority_move_item(drag_index, drop_index)
+            # Perform the single-item move operation
+            self._priority_move_item(self._drag_data["index"], drop_index)
+        else:
+            # Just clean up selection if no move occurred
+            widget.selection_clear(0, "end")
+            if self._drag_data["index"] is not None and self._drag_data["index"] < widget.size():
+                widget.selection_set(self._drag_data["index"])
 
-        # Clear drag data
-        self._drag_data = {"item": None, "index": None}
+        # Clear drag data and hide feedback
+        self._drag_data = {"item": None, "index": None, "dragging": False}
+        self._drag_feedback_label.grid_remove()
+
+    def _on_priority_drag_leave(self, event):
+        """Handle when mouse leaves the listbox during drag."""
+        widget = event.widget
+        if self._drag_data["dragging"]:
+            # Reset cursor and clear highlights when leaving
+            widget.configure(cursor="no")
+            widget.selection_clear(0, "end")
+            # Keep only the source item selected
+            if self._drag_data["index"] is not None and self._drag_data["index"] < widget.size():
+                widget.selection_set(self._drag_data["index"])
+            # Update feedback to show invalid drop zone
+            self._drag_feedback_label.config(text="❌ Invalid drop zone - return to list")
 
     def _priority_move_item(self, from_index: int, to_index: int):
         """Move an item from one position to another in the priority list."""
@@ -2012,6 +2074,7 @@ class SettingsPanel:
         # Save changes
         self._settings.alter()
 
+
     # Context menu methods for priority list
     def _show_priority_context_menu(self, event):
         """Show the right-click context menu for priority list."""
@@ -2029,8 +2092,8 @@ class SettingsPanel:
 
     def _priority_move_to_position(self, position: int):
         """Move selected item to a specific position (0=top, -1=bottom)."""
-        current_idx = self._priority_idx()
-        if current_idx is None:
+        current_selection = list(self._priority_list.curselection())
+        if not current_selection:
             return
 
         list_size = self._priority_list.size()
@@ -2039,14 +2102,15 @@ class SettingsPanel:
         else:  # Move to specific position
             target_idx = max(0, min(position, list_size - 1))
 
-        self._priority_move_item(current_idx, target_idx)
+        self._priority_move_item(current_selection[0], target_idx)
 
     def _priority_move_by_offset(self, offset: int):
         """Move selected item by a relative offset (negative=up, positive=down)."""
-        current_idx = self._priority_idx()
-        if current_idx is None:
+        current_selection = list(self._priority_list.curselection())
+        if not current_selection:
             return
 
+        current_idx = current_selection[0]
         new_idx = current_idx + offset
         list_size = self._priority_list.size()
         target_idx = max(0, min(new_idx, list_size - 1))
@@ -2056,19 +2120,23 @@ class SettingsPanel:
 
     def _priority_move_to_custom_position(self):
         """Show dialog to move item to a custom position."""
-        current_idx = self._priority_idx()
-        if current_idx is None:
+        current_selection = list(self._priority_list.curselection())
+        if not current_selection:
             return
 
         list_size = self._priority_list.size()
+        current_idx = current_selection[0]
 
         # Create a simple dialog for position input
+        prompt = f"Enter position (1-{list_size}):"
+        initial_value = current_idx + 1
+
         position = tkinter.simpledialog.askinteger(
             "Move to Position",
-            f"Enter position (1-{list_size}):",
+            prompt,
             minvalue=1,
             maxvalue=list_size,
-            initialvalue=current_idx + 1
+            initialvalue=initial_value
         )
 
         if position is not None:
