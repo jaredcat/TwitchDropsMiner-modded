@@ -2377,46 +2377,82 @@ class SettingsPanel:
         self._run_steam_sort("rating")
 
     def _run_steam_sort(self, sort_type: str):
-        """Run Steam sorting using the main application's event loop."""
+        """Run Steam sorting in a separate thread to avoid blocking the GUI."""
         import asyncio
+        import threading
 
         print(f"Starting Steam sort for {sort_type}")
 
-        try:
-            # Get the current event loop (the main application's loop)
-            loop = asyncio.get_running_loop()
-            print("Using existing event loop")
+        # Disable buttons to prevent multiple simultaneous sorts
+        self._steam_sort_playtime.config(state="disabled")
+        self._steam_sort_release.config(state="disabled")
+        self._steam_sort_rating.config(state="disabled")
 
-            # Schedule the coroutine to run on the main event loop
-            task = loop.create_task(self._steam_sort_games(sort_type))
+        # Update button text to show progress
+        sort_type_map = {
+            "playtime": "⏱️",
+            "release_date": "📅",
+            "rating": "⭐"
+        }
+        button_map = {
+            "playtime": self._steam_sort_playtime,
+            "release_date": self._steam_sort_release,
+            "rating": self._steam_sort_rating
+        }
 
-            # Add error handling
-            def handle_task_done(task):
-                try:
-                    result = task.result()
-                    print("Steam sort completed successfully")
-                except Exception as e:
-                    print(f"Steam sort error: {e}")
-                    import traceback
-                    traceback.print_exc()
+        original_text = button_map[sort_type].cget("text")
+        button_map[sort_type].config(text="⏳")
 
-            task.add_done_callback(handle_task_done)
-            print("Steam sort task scheduled")
-
-        except RuntimeError as e:
-            print(f"Failed to get event loop: {e}")
-            # Fallback: try to create a new event loop
+        def run_steam_sort_thread():
+            """Run Steam sorting in a separate thread with proper event loop handling."""
+            print(f"Starting Steam sort thread for {sort_type}")
             try:
+                # Create a new event loop for this thread
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                print("Created new event loop as fallback")
+                print("Created new event loop for Steam sort")
+
+                # Run the async function
+                print("Running steam_sort_games...")
                 loop.run_until_complete(self._steam_sort_games(sort_type))
-                print("Steam sort completed successfully (fallback)")
-                loop.close()
-            except Exception as fallback_error:
-                print(f"Fallback also failed: {fallback_error}")
+                print("Steam sort completed successfully")
+
+            except Exception as e:
+                print(f"Steam sort error: {e}")
                 import traceback
                 traceback.print_exc()
+            finally:
+                print("Closing Steam sort event loop")
+                try:
+                    # Cancel any remaining tasks
+                    pending = asyncio.all_tasks(loop)
+                    for task in pending:
+                        task.cancel()
+
+                    # Wait for tasks to complete cancellation
+                    if pending:
+                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+
+                    # Close the loop
+                    loop.close()
+                    print("Steam sort event loop closed")
+                except Exception as cleanup_error:
+                    print(f"Error during cleanup: {cleanup_error}")
+
+                # Re-enable buttons and restore text
+                def restore_buttons():
+                    self._steam_sort_playtime.config(state="normal", text="⏱️")
+                    self._steam_sort_release.config(state="normal", text="📅")
+                    self._steam_sort_rating.config(state="normal", text="⭐")
+                    self._update_steam_button_states()
+
+                # Schedule button restoration on the main thread
+                self._root.after(0, restore_buttons)
+
+        # Run in a separate thread to avoid blocking the GUI
+        thread = threading.Thread(target=run_steam_sort_thread, daemon=True)
+        thread.start()
+        print("Steam sort thread started")
 
 
 class HelpTab:

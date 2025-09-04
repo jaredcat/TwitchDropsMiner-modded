@@ -8,8 +8,9 @@ from datetime import datetime, timezone, timedelta
 import aiohttp
 from yarl import URL
 
-from constants import JsonType, CACHE_DB
+from constants import JsonType
 from utils import json_load, json_save
+from pathlib import Path
 
 logger = logging.getLogger("TwitchDrops")
 
@@ -39,7 +40,8 @@ class SteamAPIClient:
 
     BASE_URL = "https://api.steampowered.com"
     STORE_URL = "https://store.steampowered.com/api"
-    CACHE_DURATION = timedelta(days=7)  # Cache Steam data for 7 days
+    CACHE_DURATION = timedelta(days=30)  # Cache Steam data for 90 days
+    STEAM_CACHE_FILE = Path("steam_data.json")
 
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -48,7 +50,7 @@ class SteamAPIClient:
         self._memory_cache_timestamps: Dict[str, datetime] = {}
         self._memory_cache_duration = 3600  # 1 hour memory cache
 
-        # Load persistent cache from mappings.json
+        # Load persistent cache from steam_data.json
         self._load_persistent_cache()
 
     async def get_session(self) -> aiohttp.ClientSession:
@@ -63,22 +65,18 @@ class SteamAPIClient:
             await self._session.close()
 
     def _load_persistent_cache(self):
-        """Load Steam data cache from mappings.json."""
+        """Load Steam data cache from steam_data.json."""
         try:
-            cache_data = json_load(CACHE_DB, {})
-            self._persistent_cache = cache_data.get("steam_data", {})
+            self._persistent_cache = json_load(self.STEAM_CACHE_FILE, {})
             logger.debug(f"Loaded {len(self._persistent_cache)} Steam data entries from cache")
         except Exception as e:
             logger.warning(f"Failed to load Steam cache: {e}")
             self._persistent_cache = {}
 
     def _save_persistent_cache(self):
-        """Save Steam data cache to mappings.json."""
+        """Save Steam data cache to steam_data.json."""
         try:
-            # Load existing cache data
-            cache_data = json_load(CACHE_DB, {})
-            cache_data["steam_data"] = self._persistent_cache
-            json_save(CACHE_DB, cache_data, sort=True)
+            json_save(self.STEAM_CACHE_FILE, self._persistent_cache, sort=True)
             logger.debug(f"Saved {len(self._persistent_cache)} Steam data entries to cache")
         except Exception as e:
             logger.warning(f"Failed to save Steam cache: {e}")
@@ -120,7 +118,7 @@ class SteamAPIClient:
         return age.total_seconds() < self._memory_cache_duration
 
     async def _make_request(self, url: str, params: Optional[Dict[str, Any]] = None) -> JsonType:
-        """Make HTTP request with memory caching."""
+        """Make HTTP request with memory caching and timeout."""
         cache_key = f"{url}:{str(params)}"
 
         # Check memory cache first
@@ -129,8 +127,10 @@ class SteamAPIClient:
             return self._memory_cache[cache_key]
 
         session = await self.get_session()
+        timeout = aiohttp.ClientTimeout(total=30)  # 30 second timeout
+
         try:
-            async with session.get(url, params=params) as response:
+            async with session.get(url, params=params, timeout=timeout) as response:
                 if response.status == 200:
                     data = await response.json()
                     # Cache the result in memory
@@ -143,6 +143,8 @@ class SteamAPIClient:
                     raise SteamAPIError("Steam API rate limit exceeded")
                 else:
                     raise SteamAPIError(f"Steam API request failed with status {response.status}")
+        except asyncio.TimeoutError:
+            raise SteamAPIError("Steam API request timed out")
         except aiohttp.ClientError as e:
             raise SteamAPIError(f"Network error: {e}")
 
@@ -179,10 +181,10 @@ class SteamAPIClient:
         try:
             data = await self._make_request(url, params)
             logger.debug(f"Received response: {data}")
-            
+
             games = []
             response_data = data.get("response", {})
-            
+
             if "games" not in response_data:
                 logger.warning(f"No games found in response: {response_data}")
                 return []
@@ -325,10 +327,21 @@ class SteamAPIClient:
             self._save_persistent_cache()
             logger.info("Cleared all Steam cache data")
 
+    def delete_cache_file(self):
+        """Delete the Steam cache file completely."""
+        try:
+            if self.STEAM_CACHE_FILE.exists():
+                self.STEAM_CACHE_FILE.unlink()
+                logger.info(f"Deleted Steam cache file: {self.STEAM_CACHE_FILE}")
+            self._persistent_cache.clear()
+        except Exception as e:
+            logger.warning(f"Failed to delete Steam cache file: {e}")
+
     def get_cache_info(self) -> Dict[str, Any]:
         """Get information about cached Steam data."""
         now = datetime.now(timezone.utc)
         cache_info = {
+            "cache_file": str(self.STEAM_CACHE_FILE),
             "total_entries": len(self._persistent_cache),
             "users": [],
             "oldest_entry": None,
@@ -346,7 +359,8 @@ class SteamAPIClient:
                     "steam_id": steam_id,
                     "cached_at": cached_time.isoformat(),
                     "age_days": age.days,
-                    "is_valid": age < self.CACHE_DURATION
+                    "is_valid": age < self.CACHE_DURATION,
+                    "games_count": len(cache_entry["data"]) if "data" in cache_entry else 0
                 })
                 timestamps.append(cached_time)
 
