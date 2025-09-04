@@ -2270,14 +2270,12 @@ class SettingsPanel:
     def _igdb_sort_by_release_date(self):
         """Sort priority list by IGDB release date."""
         print("=== IGDB sort by release date clicked ===")
-        # Log to file so it shows up with pythonw.exe
         try:
             import logging
             logging.getLogger("TwitchDrops").info("IGDB sort (release_date) clicked")
         except Exception:
             pass
 
-        # Simple implementation like Steam - no threading needed
         current_priority = list(self._settings.priority)
         if not current_priority:
             print("No games in priority list")
@@ -2290,8 +2288,41 @@ class SettingsPanel:
             print("IGDB credentials missing - keeping original priority order")
             return
 
-        # For now, just keep original order until we implement the actual IGDB call
-        print("IGDB sorting not yet implemented - keeping original order")
+        try:
+            import asyncio
+            from igdb_api import IGDBAPIClient
+
+            async def sort_games():
+                async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_client_secret) as igdb_client:
+                    return await igdb_client.sort_games_by_release_date(current_priority, self._manager._twitch.wanted_games)
+
+            # Run the async function
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                sorted_priority = loop.run_until_complete(sort_games())
+                print(f"Sorted {len(sorted_priority)} games by release date")
+
+                # Update the priority list
+                self._settings.priority = sorted_priority
+                self._settings.alter()
+                self._settings.save(force=True)
+
+                # Update GUI
+                self._priority_list.delete(0, tk.END)
+                for game in sorted_priority:
+                    self._priority_list.insert(tk.END, game)
+
+                print("Priority list updated successfully")
+            finally:
+                loop.close()
+
+        except ImportError as e:
+            print(f"IGDB API module not available: {e}")
+        except Exception as e:
+            print(f"IGDB API error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _igdb_sort_by_rating(self):
         """Sort priority list by IGDB rating."""
@@ -2301,7 +2332,6 @@ class SettingsPanel:
         print(f"Client ID value: {self._settings.igdb_client_id[:8]}...")
         print(f"Priority list length: {len(self._settings.priority)}")
 
-        # Simple implementation like Steam - no threading needed
         current_priority = list(self._settings.priority)
         if not current_priority:
             print("No games in priority list")
@@ -2314,8 +2344,41 @@ class SettingsPanel:
             print("IGDB credentials missing - keeping original priority order")
             return
 
-        # For now, just keep original order until we implement the actual IGDB call
-        print("IGDB sorting not yet implemented - keeping original order")
+        try:
+            import asyncio
+            from igdb_api import IGDBAPIClient
+
+            async def sort_games():
+                async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_client_secret) as igdb_client:
+                    return await igdb_client.sort_games_by_rating(current_priority, self._manager._twitch.wanted_games)
+
+            # Run the async function
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                sorted_priority = loop.run_until_complete(sort_games())
+                print(f"Sorted {len(sorted_priority)} games by rating")
+
+                # Update the priority list
+                self._settings.priority = sorted_priority
+                self._settings.alter()
+                self._settings.save(force=True)
+
+                # Update GUI
+                self._priority_list.delete(0, tk.END)
+                for game in sorted_priority:
+                    self._priority_list.insert(tk.END, game)
+
+                print("Priority list updated successfully")
+            finally:
+                loop.close()
+
+        except ImportError as e:
+            print(f"IGDB API module not available: {e}")
+        except Exception as e:
+            print(f"IGDB API error: {e}")
+            import traceback
+            traceback.print_exc()
 
 
     def _igdb_client_id_validate(self, entry: PlaceholderEntry) -> bool:

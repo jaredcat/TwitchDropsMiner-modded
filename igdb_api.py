@@ -318,3 +318,91 @@ class IGDBAPIClient:
             cache_info["newest_entry"] = max(timestamps).isoformat()
 
         return cache_info
+
+    async def sort_games_by_release_date(self, game_names: List[str], twitch_games: Dict) -> List[str]:
+        """Sort game names by IGDB release date."""
+        if not game_names:
+            return game_names
+
+        # Get game IDs from Twitch data
+        game_ids = []
+        for game_name in game_names:
+            for game in twitch_games.keys():
+                if game.name == game_name:
+                    game_ids.append(game.id)
+                    break
+
+        if not game_ids:
+            print("No IGDB game IDs found - keeping original order")
+            return game_names
+
+        # Get IGDB data
+        games_data = await self.get_games_data(game_ids)
+        if not games_data:
+            print("No IGDB data available - keeping original order")
+            return game_names
+
+        # Create mapping of game names to IGDB data
+        igdb_data = {}
+        for game in games_data:
+            for twitch_game in twitch_games.keys():
+                if twitch_game.id == game.igdb_id:
+                    igdb_data[twitch_game.name] = {
+                        "release_date": game.release_date,
+                        "rating": game.rating
+                    }
+                    break
+
+        # Sort by release date
+        def get_release_date(game_name):
+            game_data = igdb_data.get(game_name, {})
+            release_date = game_data.get("release_date")
+            if not release_date:
+                return "9999-12-31"  # Put games without dates at the end
+            return release_date
+
+        return sorted(game_names, key=get_release_date)
+
+    async def sort_games_by_rating(self, game_names: List[str], twitch_games: Dict) -> List[str]:
+        """Sort game names by IGDB rating (highest first)."""
+        if not game_names:
+            return game_names
+
+        # Get game IDs from Twitch data
+        game_ids = []
+        for game_name in game_names:
+            for game in twitch_games.keys():
+                if game.name == game_name:
+                    game_ids.append(game.id)
+                    break
+
+        if not game_ids:
+            print("No IGDB game IDs found - keeping original order")
+            return game_names
+
+        # Get IGDB data
+        games_data = await self.get_games_data(game_ids)
+        if not games_data:
+            print("No IGDB data available - keeping original order")
+            return game_names
+
+        # Create mapping of game names to IGDB data
+        igdb_data = {}
+        for game in games_data:
+            for twitch_game in twitch_games.keys():
+                if twitch_game.id == game.igdb_id:
+                    igdb_data[twitch_game.name] = {
+                        "release_date": game.release_date,
+                        "rating": game.rating
+                    }
+                    break
+
+        # Sort by rating (highest first)
+        def get_rating(game_name):
+            game_data = igdb_data.get(game_name, {})
+            rating = game_data.get("rating")
+            if rating is None:
+                return 0.0  # Games without ratings go to end
+            return rating
+
+        return sorted(game_names, key=get_rating, reverse=True)
