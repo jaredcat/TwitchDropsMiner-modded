@@ -17,6 +17,7 @@ from tkinter.font import Font, nametofont
 from functools import partial, cached_property
 from datetime import datetime, timedelta, timezone
 from tkinter import Tk, ttk, StringVar, DoubleVar, IntVar
+import tkinter.simpledialog
 from typing import Any, Union, Tuple, TypedDict, NoReturn, Generic, TYPE_CHECKING
 
 import pystray
@@ -1668,6 +1669,20 @@ class SettingsPanel:
         )
         self._priority_list.grid(column=0, row=1, rowspan=3, sticky="nsew")
         self._priority_list.insert("end", *self._settings.priority)
+
+        # Add drag and drop functionality
+        self._drag_data = {"item": None, "index": None}
+        self._priority_list.bind("<Button-1>", self._on_priority_drag_start)
+        self._priority_list.bind("<B1-Motion>", self._on_priority_drag_motion)
+        self._priority_list.bind("<ButtonRelease-1>", self._on_priority_drag_release)
+
+        # Add right-click context menu
+        self._priority_menu = tk.Menu(self._priority_list, tearoff=0)
+        self._priority_menu.add_command(label="Move to Top", command=lambda: self._priority_move_to_position(0))
+        self._priority_menu.add_command(label="Move to Bottom", command=lambda: self._priority_move_to_position(-1))
+        self._priority_menu.add_separator()
+        self._priority_menu.add_command(label="Move to Position...", command=self._priority_move_to_custom_position)
+        self._priority_list.bind("<Button-3>", self._show_priority_context_menu)  # Right-click
         ttk.Button(
             priority_frame,
             width=2,
@@ -1935,6 +1950,131 @@ class SettingsPanel:
             self._exclude_list.delete(idx)
             # Update dropdown options to reflect the change
             self._update_dropdown_options()
+
+    # Drag and drop methods for priority list
+    def _on_priority_drag_start(self, event):
+        """Start drag operation - record the item being dragged."""
+        widget = event.widget
+        index = widget.nearest(event.y)
+        if index < widget.size():
+            self._drag_data["index"] = index
+            self._drag_data["item"] = widget.get(index)
+            widget.selection_clear(0, "end")
+            widget.selection_set(index)
+
+    def _on_priority_drag_motion(self, event):
+        """Handle drag motion - provide visual feedback."""
+        widget = event.widget
+        index = widget.nearest(event.y)
+        if index < widget.size() and self._drag_data["item"] is not None:
+            # Clear previous selection and show current drop target
+            widget.selection_clear(0, "end")
+            widget.selection_set(index)
+
+    def _on_priority_drag_release(self, event):
+        """Complete drag operation - move the item to new position."""
+        widget = event.widget
+        drop_index = widget.nearest(event.y)
+        drag_index = self._drag_data["index"]
+
+        if (self._drag_data["item"] is not None and
+            drag_index is not None and
+            drop_index < widget.size() and
+            drag_index != drop_index):
+
+            # Perform the move operation
+            self._priority_move_item(drag_index, drop_index)
+
+        # Clear drag data
+        self._drag_data = {"item": None, "index": None}
+
+    def _priority_move_item(self, from_index: int, to_index: int):
+        """Move an item from one position to another in the priority list."""
+        if from_index == to_index:
+            return
+
+        # Get the item being moved
+        item = self._priority_list.get(from_index)
+
+        # Remove from old position
+        self._priority_list.delete(from_index)
+        self._settings.priority.pop(from_index)
+
+        # Insert at new position
+        self._priority_list.insert(to_index, item)
+        self._settings.priority.insert(to_index, item)
+
+        # Update selection and ensure visibility
+        self._priority_list.selection_clear(0, "end")
+        self._priority_list.selection_set(to_index)
+        self._priority_list.see(to_index)
+
+        # Save changes
+        self._settings.alter()
+
+    # Context menu methods for priority list
+    def _show_priority_context_menu(self, event):
+        """Show the right-click context menu for priority list."""
+        widget = event.widget
+        index = widget.nearest(event.y)
+        if index < widget.size():
+            # Select the clicked item
+            widget.selection_clear(0, "end")
+            widget.selection_set(index)
+            # Show context menu
+            try:
+                self._priority_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                self._priority_menu.grab_release()
+
+    def _priority_move_to_position(self, position: int):
+        """Move selected item to a specific position (0=top, -1=bottom)."""
+        current_idx = self._priority_idx()
+        if current_idx is None:
+            return
+
+        list_size = self._priority_list.size()
+        if position == -1:  # Move to bottom
+            target_idx = list_size - 1
+        else:  # Move to specific position
+            target_idx = max(0, min(position, list_size - 1))
+
+        self._priority_move_item(current_idx, target_idx)
+
+    def _priority_move_by_offset(self, offset: int):
+        """Move selected item by a relative offset (negative=up, positive=down)."""
+        current_idx = self._priority_idx()
+        if current_idx is None:
+            return
+
+        new_idx = current_idx + offset
+        list_size = self._priority_list.size()
+        target_idx = max(0, min(new_idx, list_size - 1))
+
+        if target_idx != current_idx:
+            self._priority_move_item(current_idx, target_idx)
+
+    def _priority_move_to_custom_position(self):
+        """Show dialog to move item to a custom position."""
+        current_idx = self._priority_idx()
+        if current_idx is None:
+            return
+
+        list_size = self._priority_list.size()
+
+        # Create a simple dialog for position input
+        position = tkinter.simpledialog.askinteger(
+            "Move to Position",
+            f"Enter position (1-{list_size}):",
+            minvalue=1,
+            maxvalue=list_size,
+            initialvalue=current_idx + 1
+        )
+
+        if position is not None:
+            # Convert from 1-based to 0-based indexing
+            target_idx = position - 1
+            self._priority_move_item(current_idx, target_idx)
 
 
 class HelpTab:
