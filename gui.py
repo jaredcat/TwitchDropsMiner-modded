@@ -1529,20 +1529,23 @@ class SettingsPanel:
         }
         master.rowconfigure(0, weight=1)
         master.columnconfigure(0, weight=1)
-        # use a frame to center the content within the tab
+        # use a frame to fill the content within the tab
         center_frame = ttk.Frame(master)
-        center_frame.grid(column=0, row=0)
+        center_frame.grid(column=0, row=0, sticky="nsew")
+        center_frame.rowconfigure(0, weight=1)
+        center_frame.columnconfigure(0, weight=1)
+        center_frame.columnconfigure(1, weight=1)
+        center_frame.columnconfigure(2, weight=1)
         # General section
         general_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "general", "name")
         )
         general_frame.grid(column=0, row=0, sticky="nsew")
-        # use another frame to center the options within the section
-        # NOTE: this can be adjusted or removed later on if more options were to be added
+        # use another frame to contain the options within the section
         general_frame.rowconfigure(0, weight=1)
         general_frame.columnconfigure(0, weight=1)
         center_frame2 = ttk.Frame(general_frame)
-        center_frame2.grid(column=0, row=0)
+        center_frame2.grid(column=0, row=0, sticky="nsew")
         # language frame
         language_frame = ttk.Frame(center_frame2)
         language_frame.grid(column=0, row=0)
