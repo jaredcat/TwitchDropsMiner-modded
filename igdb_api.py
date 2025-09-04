@@ -178,23 +178,37 @@ class IGDBAPIClient:
             "Content-Type": "text/plain"
         }
 
+        print(f"Making IGDB API request to {endpoint}")
+        print(f"Query: {query[:100]}{'...' if len(query) > 100 else ''}")
+        print(f"Headers: Client-ID={self.client_id[:8]}..., Authorization=Bearer {self.access_token[:20]}...")
+
         try:
             async with session.post(f"{self.BASE_URL}/{endpoint}", data=query, headers=headers, timeout=timeout) as response:
+                print(f"IGDB API response status: {response.status}")
                 if response.status == 200:
                     data = await response.json()
+                    print(f"IGDB API returned {len(data)} results")
                     # Cache the result in memory
                     self._memory_cache[cache_key] = data
                     self._memory_cache_timestamps[cache_key] = datetime.now(timezone.utc)
                     return data
                 elif response.status == 401:
+                    error_text = await response.text()
+                    print(f"IGDB API authentication failed: {error_text}")
                     raise IGDBAPIError("Invalid IGDB API credentials")
                 elif response.status == 429:
+                    error_text = await response.text()
+                    print(f"IGDB API rate limit exceeded: {error_text}")
                     raise IGDBAPIError("IGDB API rate limit exceeded")
                 else:
+                    error_text = await response.text()
+                    print(f"IGDB API request failed: {response.status} - {error_text}")
                     raise IGDBAPIError(f"IGDB API request failed with status {response.status}")
         except asyncio.TimeoutError:
+            print("IGDB API request timed out")
             raise IGDBAPIError("IGDB API request timed out")
         except aiohttp.ClientError as e:
+            print(f"IGDB API network error: {e}")
             raise IGDBAPIError(f"Network error: {e}")
 
     async def get_games_data(self, game_ids: List[int]) -> List[IGDBGame]:
@@ -262,6 +276,55 @@ class IGDBAPIClient:
                 continue
 
         print(f"Successfully processed {len(all_games)} games total")
+        return all_games
+
+    async def search_games_by_names(self, game_names: List[str]) -> List[IGDBGame]:
+        """Search IGDB for games by their names."""
+        if not game_names:
+            return []
+
+        print(f"Searching IGDB for {len(game_names)} games by name")
+
+        # Process in batches to avoid API limits
+        batch_size = 20  # Smaller batches for name searches
+        all_games = []
+
+        for i in range(0, len(game_names), batch_size):
+            batch_names = game_names[i:i + batch_size]
+            print(f"Processing name batch {i//batch_size + 1}: {len(batch_names)} games")
+
+            # Build search query for IGDB API
+            # Use fuzzy matching with name search
+            search_terms = []
+            for name in batch_names:
+                # Escape special characters and add fuzzy matching
+                escaped_name = name.replace('"', '\\"')
+                search_terms.append(f'name ~ "{escaped_name}"*')
+
+            query = f"""
+            fields id,name,first_release_date,rating,rating_count;
+            search "{batch_names[0]}";
+            where {search_terms[0] if len(search_terms) == 1 else ' | '.join(search_terms)};
+            limit {len(batch_names) * 2};
+            """
+
+            try:
+                data = await self._make_request("games", query)
+                print(f"IGDB search returned {len(data)} games for batch")
+
+                for game_data in data:
+                    game = self._create_game_from_data(game_data)
+                    all_games.append(game)
+
+                # Small delay between batches
+                if i + batch_size < len(game_names):
+                    await asyncio.sleep(0.5)
+
+            except IGDBAPIError as e:
+                print(f"Failed to search IGDB for batch: {e}")
+                continue
+
+        print(f"Successfully found {len(all_games)} games total")
         return all_games
 
     def _create_game_from_data(self, game_data: Dict[str, Any]) -> IGDBGame:
@@ -346,29 +409,45 @@ class IGDBAPIClient:
         print(f"Sorting {len(game_names)} games by release date")
         print(f"Available Twitch games: {len(twitch_games)}")
 
-        # Get game IDs from Twitch data
+        # Debug: Show what Twitch games we have
+        if twitch_games:
+            print("Twitch games available:")
+            for game, priority in list(twitch_games.items())[:5]:  # Show first 5
+                print(f"  - {game.name} (ID: {game.id}, Priority: {priority})")
+            if len(twitch_games) > 5:
+                print(f"  ... and {len(twitch_games) - 5} more")
+
+        # First try to get IGDB IDs from Twitch drops
         game_ids = []
-        found_games = []
+        found_by_id = []
         for game_name in game_names:
             found = False
             for game in twitch_games.keys():
                 if game.name == game_name:
                     game_ids.append(game.id)
-                    found_games.append(game_name)
+                    found_by_id.append(game_name)
                     found = True
                     break
             if not found:
-                print(f"Game not found in Twitch data: {game_name}")
+                print(f"Game not found in Twitch drops: {game_name}")
 
-        print(f"Found {len(game_ids)} IGDB game IDs out of {len(game_names)} games")
-        print(f"Game IDs: {game_ids[:10]}{'...' if len(game_ids) > 10 else ''}")
+        print(f"Found {len(game_ids)} games in Twitch drops, {len(game_names) - len(game_ids)} need name search")
 
-        if not game_ids:
-            print("No IGDB game IDs found - keeping original order")
-            return game_names
+        # Get IGDB data for games found in drops
+        games_data = []
+        if game_ids:
+            print(f"Getting IGDB data for {len(game_ids)} games by ID: {game_ids[:5]}{'...' if len(game_ids) > 5 else ''}")
+            games_data = await self.get_games_data(game_ids)
+            print(f"Retrieved IGDB data for {len(games_data)} games from drops")
 
-        # Get IGDB data
-        games_data = await self.get_games_data(game_ids)
+        # For games not found in drops, search by name
+        games_not_found = [name for name in game_names if name not in found_by_id]
+        if games_not_found:
+            print(f"Searching IGDB by name for {len(games_not_found)} games")
+            name_search_results = await self.search_games_by_names(games_not_found)
+            games_data.extend(name_search_results)
+            print(f"Found {len(name_search_results)} additional games by name search")
+
         if not games_data:
             print("No IGDB data available - keeping original order")
             return game_names
@@ -376,13 +455,12 @@ class IGDBAPIClient:
         # Create mapping of game names to IGDB data
         igdb_data = {}
         for game in games_data:
-            for twitch_game in twitch_games.keys():
-                if twitch_game.id == game.igdb_id:
-                    igdb_data[twitch_game.name] = {
-                        "release_date": game.release_date,
-                        "rating": game.rating
-                    }
-                    break
+            igdb_data[game.name] = {
+                "release_date": game.release_date,
+                "rating": game.rating
+            }
+
+        print(f"Found IGDB data for {len(igdb_data)} games total")
 
         # Sort by release date
         def get_release_date(game_name):
@@ -400,31 +478,37 @@ class IGDBAPIClient:
             return game_names
 
         print(f"Sorting {len(game_names)} games by rating")
-        print(f"Available Twitch games: {len(twitch_games)}")
 
-        # Get game IDs from Twitch data
+        # First try to get IGDB IDs from Twitch drops
         game_ids = []
-        found_games = []
+        found_by_id = []
         for game_name in game_names:
             found = False
             for game in twitch_games.keys():
                 if game.name == game_name:
                     game_ids.append(game.id)
-                    found_games.append(game_name)
+                    found_by_id.append(game_name)
                     found = True
                     break
             if not found:
-                print(f"Game not found in Twitch data: {game_name}")
+                print(f"Game not found in Twitch drops: {game_name}")
 
-        print(f"Found {len(game_ids)} IGDB game IDs out of {len(game_names)} games")
-        print(f"Game IDs: {game_ids[:10]}{'...' if len(game_ids) > 10 else ''}")
+        print(f"Found {len(game_ids)} games in Twitch drops, {len(game_names) - len(game_ids)} need name search")
 
-        if not game_ids:
-            print("No IGDB game IDs found - keeping original order")
-            return game_names
+        # Get IGDB data for games found in drops
+        games_data = []
+        if game_ids:
+            games_data = await self.get_games_data(game_ids)
+            print(f"Retrieved IGDB data for {len(games_data)} games from drops")
 
-        # Get IGDB data
-        games_data = await self.get_games_data(game_ids)
+        # For games not found in drops, search by name
+        games_not_found = [name for name in game_names if name not in found_by_id]
+        if games_not_found:
+            print(f"Searching IGDB by name for {len(games_not_found)} games")
+            name_search_results = await self.search_games_by_names(games_not_found)
+            games_data.extend(name_search_results)
+            print(f"Found {len(name_search_results)} additional games by name search")
+
         if not games_data:
             print("No IGDB data available - keeping original order")
             return game_names
@@ -432,13 +516,12 @@ class IGDBAPIClient:
         # Create mapping of game names to IGDB data
         igdb_data = {}
         for game in games_data:
-            for twitch_game in twitch_games.keys():
-                if twitch_game.id == game.igdb_id:
-                    igdb_data[twitch_game.name] = {
-                        "release_date": game.release_date,
-                        "rating": game.rating
-                    }
-                    break
+            igdb_data[game.name] = {
+                "release_date": game.release_date,
+                "rating": game.rating
+            }
+
+        print(f"Found IGDB data for {len(igdb_data)} games total")
 
         # Sort by rating (highest first)
         def get_rating(game_name):

@@ -2320,7 +2320,9 @@ class SettingsPanel:
 
             async def sort_games():
                 async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_client_secret) as igdb_client:
-                    return await igdb_client.sort_games_by_release_date(current_priority, self._manager._twitch.wanted_games)
+                    # Use inventory games instead of wanted_games
+                    inventory_games = {campaign.game: 1 for campaign in self._manager._twitch.inventory}
+                    return await igdb_client.sort_games_by_release_date(current_priority, inventory_games)
 
             # Use existing event loop or create a new one
             try:
@@ -2396,7 +2398,9 @@ class SettingsPanel:
 
             async def sort_games():
                 async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_client_secret) as igdb_client:
-                    return await igdb_client.sort_games_by_rating(current_priority, self._manager._twitch.wanted_games)
+                    # Use inventory games instead of wanted_games
+                    inventory_games = {campaign.game: 1 for campaign in self._manager._twitch.inventory}
+                    return await igdb_client.sort_games_by_rating(current_priority, inventory_games)
 
             # Use existing event loop or create a new one
             try:
