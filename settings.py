@@ -6,7 +6,14 @@ from typing import Any, TypedDict, TYPE_CHECKING
 from yarl import URL
 
 from utils import json_load, json_save
-from constants import SETTINGS_PATH, DEFAULT_LANG
+from constants import (
+    SETTINGS_PATH,
+    DEFAULT_LANG,
+    PRIORITY_ALGORITHM_LIST,
+    PRIORITY_ALGORITHM_SMART,
+    PRIORITY_ALGORITHM_WEIGHTED,
+    PRIORITY_ALGORITHM_ENDING_SOONEST,
+)
 
 if TYPE_CHECKING:
     from main import ParsedArgs
@@ -20,7 +27,7 @@ class SettingsFile(TypedDict):
     exclude: set[str]
     priority: list[str]
     priority_only: bool
-    prioritize_by_ending_soonest: bool
+    priority_algorithm: str
     unlinked_campaigns: bool
     autostart_tray: bool
     connection_quality: int
@@ -35,7 +42,7 @@ default_settings: SettingsFile = {
     "dark_theme": False,
     "autostart": False,
     "priority_only": True,
-    "prioritize_by_ending_soonest": False,
+    "priority_algorithm": PRIORITY_ALGORITHM_LIST,
     "unlinked_campaigns": False,
     "autostart_tray": False,
     "connection_quality": 1,
@@ -62,7 +69,7 @@ class Settings:
     exclude: set[str]
     priority: list[str]
     priority_only: bool
-    prioritize_by_ending_soonest: bool
+    priority_algorithm: str
     unlinked_campaigns: bool
     autostart_tray: bool
     connection_quality: int
@@ -78,10 +85,25 @@ class Settings:
         self._altered: bool = False
 
     def __get_settings_from_env__(self):
-        if(os.environ.get('prioritize_by_ending_soonest') == '1'):
-            self._settings["prioritize_by_ending_soonest"] = True
-        if(os.environ.get('UNLINKED_CAMPAIGNS') == '1'):
+        if os.environ.get("prioritize_by_ending_soonest") == "1":
+            self._settings["priority_algorithm"] = PRIORITY_ALGORITHM_ENDING_SOONEST
+        if os.environ.get("UNLINKED_CAMPAIGNS") == "1":
             self._settings["unlinked_campaigns"] = True
+
+        # Migration: Convert old prioritize_by_ending_soonest to new priority_algorithm
+        if ("priority_algorithm" not in self._settings):
+            if (
+                "prioritize_by_ending_soonest" in self._settings
+            ):
+                if self._settings["prioritize_by_ending_soonest"]:
+                    self._settings["priority_algorithm"] = PRIORITY_ALGORITHM_ENDING_SOONEST
+                # Remove the old setting
+                del self._settings["prioritize_by_ending_soonest"]
+                self._altered = True
+            else:
+                self._settings["priority_algorithm"] = (
+                    PRIORITY_ALGORITHM_LIST  # Default to ordered list for existing users
+                )
 
     # default logic of reading settings is to check args first, then the settings file
     def __getattr__(self, name: str, /) -> Any:

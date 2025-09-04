@@ -32,7 +32,9 @@ else:
     # On Linux, the site-packages path includes a versioned 'pythonX.Y' folder part
     # The Lib folder is also spelled in lowercase: 'lib'
     version_info = sys.version_info
-    SYS_SITE_PACKAGES = f"lib/python{version_info.major}.{version_info.minor}/site-packages"
+    SYS_SITE_PACKAGES = (
+        f"lib/python{version_info.major}.{version_info.minor}/site-packages"
+    )
 
 
 def _resource_path(relative_path: Path | str) -> Path:
@@ -112,6 +114,11 @@ MAX_TOPICS = (MAX_WEBSOCKETS * WS_TOPICS_LIMIT) - BASE_TOPICS
 MAX_CHANNELS = MAX_TOPICS // TOPICS_PER_CHANNEL
 # Misc
 DEFAULT_LANG = "English"
+# Priority Algorithm Constants
+PRIORITY_ALGORITHM_LIST = "list"
+PRIORITY_ALGORITHM_SMART = "smart"
+PRIORITY_ALGORITHM_WEIGHTED = "weighted"
+PRIORITY_ALGORITHM_ENDING_SOONEST = "ending_soonest"
 # Intervals and Delays
 PING_INTERVAL = timedelta(minutes=3)
 PING_TIMEOUT = timedelta(seconds=10)
@@ -122,14 +129,18 @@ WINDOW_TITLE = f"Twitch Drops Miner v{__version__} (by DevilXD)"
 # Logging
 FILE_FORMATTER = logging.Formatter(
     "{asctime}.{msecs:03.0f}:\t{levelname:>7}:\t{message}",
-    style='{',
+    style="{",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-OUTPUT_FORMATTER = logging.Formatter("{levelname}: {message}", style='{', datefmt="%H:%M:%S")
+OUTPUT_FORMATTER = logging.Formatter(
+    "{levelname}: {message}", style="{", datefmt="%H:%M:%S"
+)
 
 
 class ClientInfo:
-    def __init__(self, client_url: URL, client_id: str, user_agents: str | list[str]) -> None:
+    def __init__(
+        self, client_url: URL, client_id: str, user_agents: str | list[str]
+    ) -> None:
         self.CLIENT_URL: URL = client_url
         self.CLIENT_ID: str = client_id
         self.USER_AGENT: str
@@ -183,7 +194,7 @@ class ClientType:
                 "Mozilla/5.0 (Linux; Android 13; LM-X420) AppleWebKit/537.36 "
                 "(KHTML, like Gecko) Chrome/119.0.6045.66 Mobile Safari/537.36"
             ),
-        ]
+        ],
     )
     ANDROID_APP = ClientInfo(
         URL("https://www.twitch.tv"),
@@ -222,7 +233,7 @@ class GQLOperation(JsonType):
                     "version": 1,
                     "sha256Hash": sha256,
                 }
-            }
+            },
         )
         if variables is not None:
             self.__setitem__("variables", variables)
@@ -248,7 +259,7 @@ GQL_OPERATIONS: dict[str, GQLOperation] = {
             "platform": "web",
             "isVod": False,
             "vodID": "",
-            "playerType": "site"
+            "playerType": "site",
         },
     ),
     # returns stream information for a particular channel
@@ -306,7 +317,7 @@ GQL_OPERATIONS: dict[str, GQLOperation] = {
         "5a4da2ab3d5b47c9f9ce864e727b2cb346af1e3ea8b897fe8f704a97ff017619",
         variables={
             "fetchRewardCampaigns": False,
-        }
+        },
     ),
     # returns extended information about a particular campaign
     "CampaignDetails": GQLOperation(

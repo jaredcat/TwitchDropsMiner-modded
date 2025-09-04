@@ -35,7 +35,8 @@ from cache import ImageCache
 from exceptions import ExitRequest
 from utils import resource_path, set_root_icon, webopen, Game, _T
 from constants import (
-    SELF_PATH, OUTPUT_FORMATTER, WS_TOPICS_LIMIT, MAX_WEBSOCKETS, WINDOW_TITLE, State
+    SELF_PATH, OUTPUT_FORMATTER, WS_TOPICS_LIMIT, MAX_WEBSOCKETS, WINDOW_TITLE, State,
+    PRIORITY_ALGORITHM_LIST, PRIORITY_ALGORITHM_SMART, PRIORITY_ALGORITHM_WEIGHTED, PRIORITY_ALGORITHM_ENDING_SOONEST
 )
 if sys.platform == "win32":
     from registry import RegistryKey, ValueType
@@ -1500,7 +1501,7 @@ class _SettingsVars(TypedDict):
     dark_theme: IntVar
     autostart: IntVar
     priority_only: IntVar
-    prioritize_by_ending_soonest: IntVar
+    priority_algorithm: StringVar
     unlinked_campaigns: IntVar
     tray_notifications: IntVar
     window_position: StringVar
@@ -1521,7 +1522,7 @@ class SettingsPanel:
             "dark_theme": IntVar(master, self._settings.dark_theme),
             "autostart": IntVar(master, self._settings.autostart),
             "priority_only": IntVar(master, self._settings.priority_only),
-            "prioritize_by_ending_soonest": IntVar(master, self._settings.prioritize_by_ending_soonest),
+            "priority_algorithm": StringVar(master, self._settings.priority_algorithm),
             "unlinked_campaigns": IntVar(master, self._settings.unlinked_campaigns),
             "tray_notifications": IntVar(master, self._settings.tray_notifications),
             "window_position": IntVar(master, self._settings.window_position),
@@ -1588,12 +1589,38 @@ class SettingsPanel:
         ttk.Checkbutton(
             checkboxes_frame, variable=self._vars["priority_only"], command=self.priority_only
         ).grid(column=1, row=irow, sticky="w")
-        ttk.Label(
-            checkboxes_frame, text=_("gui", "settings", "general", "prioritize_by_ending_soonest")
-        ).grid(column=0, row=(irow := irow + 1), sticky="e")
-        ttk.Checkbutton(
-            checkboxes_frame, variable=self._vars["prioritize_by_ending_soonest"], command=self.prioritize_by_ending_soonest
-        ).grid(column=1, row=irow, sticky="w")
+        # Priority algorithm selection frame
+        priority_algorithm_frame = ttk.Frame(center_frame2)
+        priority_algorithm_frame.grid(column=0, row=2)
+        ttk.Label(priority_algorithm_frame, text="Priority Algorithm: ").grid(column=0, row=0, sticky="e")
+        # Map setting values to display names
+        algorithm_display_map = {
+            PRIORITY_ALGORITHM_LIST: "Default",
+            PRIORITY_ALGORITHM_SMART: "Smart Priority",
+            PRIORITY_ALGORITHM_ENDING_SOONEST: "Ending Soonest",
+            PRIORITY_ALGORITHM_WEIGHTED: "Weighted Priority",
+        }
+        # Ensure we always have a valid algorithm setting and display name
+        current_algorithm = getattr(self._settings, 'priority_algorithm', PRIORITY_ALGORITHM_LIST)
+        current_algorithm_display = algorithm_display_map.get(current_algorithm, "Default")
+
+        # If setting is invalid, reset it to default
+        if current_algorithm not in algorithm_display_map:
+            self._settings.priority_algorithm = PRIORITY_ALGORITHM_LIST
+            current_algorithm_display = "Default"
+
+        self._priority_algorithm_menu = SelectMenu(
+            priority_algorithm_frame,
+            default=current_algorithm_display,
+            options={
+                "Default": PRIORITY_ALGORITHM_LIST,
+                "Smart Priority": PRIORITY_ALGORITHM_SMART,
+                "Ending Soonest": PRIORITY_ALGORITHM_ENDING_SOONEST,
+                "Weighted Priority": PRIORITY_ALGORITHM_WEIGHTED,
+            },
+            command=self.update_priority_algorithm,
+        )
+        self._priority_algorithm_menu.grid(column=1, row=0, sticky="w")
         ttk.Label(
             checkboxes_frame, text=_("gui", "settings", "general", "unlinked_campaigns")
         ).grid(column=0, row=(irow := irow + 1), sticky="e")
@@ -1602,7 +1629,7 @@ class SettingsPanel:
         ).grid(column=1, row=irow, sticky="w")
         # proxy frame
         proxy_frame = ttk.Frame(center_frame2)
-        proxy_frame.grid(column=0, row=2)
+        proxy_frame.grid(column=0, row=3)
         ttk.Label(proxy_frame, text=_("gui", "settings", "general", "proxy")).grid(column=0, row=0)
         self._proxy = PlaceholderEntry(
             proxy_frame,
@@ -1819,8 +1846,8 @@ class SettingsPanel:
     def priority_only(self) -> None:
         self._settings.priority_only = bool(self._vars["priority_only"].get())
 
-    def prioritize_by_ending_soonest(self) -> None:
-        self._settings.prioritize_by_ending_soonest = bool(self._vars["prioritize_by_ending_soonest"].get())
+    def update_priority_algorithm(self, algorithm: str) -> None:
+        self._settings.priority_algorithm = algorithm
 
     def unlinked_campaigns(self) -> None:
         self._settings.unlinked_campaigns = bool(self._vars["unlinked_campaigns"].get())
