@@ -2268,21 +2268,39 @@ class SettingsPanel:
             has_api_key = bool(self._settings.steam_api_key.strip())
             has_steam_id = bool(self._settings.steam_id.strip())
 
-            # Both API key and Steam ID are required
-            state = "normal" if (has_api_key and has_steam_id) else "disabled"
+            # Only playtime sorting requires Steam credentials
+            playtime_state = "normal" if (has_api_key and has_steam_id) else "disabled"
 
-            self._steam_sort_playtime.config(state=state)
-            self._steam_sort_release.config(state=state)
-            self._steam_sort_rating.config(state=state)
+            # Release date and rating sorting work without Steam (using simple fallbacks)
+            fallback_state = "normal"
+
+            self._steam_sort_playtime.config(state=playtime_state)
+            self._steam_sort_release.config(state=fallback_state)
+            self._steam_sort_rating.config(state=fallback_state)
+
+            if not (has_api_key and has_steam_id):
+                print("Steam playtime sorting disabled - Steam API key or Steam ID missing")
+
         except Exception as e:
             print(f"Steam button state update error: {e}")
 
     async def _steam_sort_games(self, sort_type: str):
         """Generic Steam sorting function."""
-        if not self._settings.steam_api_key or not self._settings.steam_id:
-            print("Steam API key or Steam ID missing")
-            return
+        if sort_type == "playtime":
+            # Only playtime sorting requires Steam API and ownership
+            if not self._settings.steam_api_key or not self._settings.steam_id:
+                print("Steam API key or Steam ID missing - required for playtime sorting")
+                return
+            await self._steam_sort_by_playtime_impl()
+        elif sort_type == "release_date":
+            # Simple alphabetical sort as fallback (could be enhanced with IGDB later)
+            await self._simple_sort_by_release_date()
+        elif sort_type == "rating":
+            # Simple reverse alphabetical sort as fallback (could be enhanced with IGDB later)
+            await self._simple_sort_by_rating()
 
+    async def _steam_sort_by_playtime_impl(self):
+        """Sort by Steam playtime - only for owned games."""
         try:
             from steam_api import SteamAPIClient, SteamAPIError
 
@@ -2292,7 +2310,7 @@ class SettingsPanel:
                 print("No games in priority list to sort")
                 return
 
-            print(f"Starting Steam sort by {sort_type} for {len(current_priority)} games")
+            print(f"Starting Steam playtime sort for {len(current_priority)} games")
 
             # Use the user-provided Steam ID
             steam_id = self._settings.steam_id.strip()
@@ -2302,62 +2320,96 @@ class SettingsPanel:
                 # Get user's games data - only for priority list games
                 print(f"Fetching Steam data for user {steam_id}")
                 games_data = await steam_client.get_user_games_data(steam_id, current_priority)
-                print(f"Retrieved {len(games_data)} games from Steam")
+                print(f"Retrieved {len(games_data)} owned games from Steam")
 
                 # Create a mapping of game names to Steam data
                 steam_games_map = {game.name.lower(): game for game in games_data}
 
-                # Sort the priority list based on Steam data
-                def get_sort_key(game_name: str):
+                # Sort the priority list based on Steam playtime
+                def get_playtime_sort_key(game_name: str):
                     steam_game = steam_games_map.get(game_name.lower())
                     if not steam_game:
-                        return (0, game_name)  # Games not found in Steam go to end
-
-                    if sort_type == "playtime":
-                        return (-steam_game.playtime_forever, game_name)
-                    elif sort_type == "release_date":
-                        # Convert date string to sortable format
-                        if steam_game.release_date:
-                            try:
-                                from datetime import datetime
-                                date_obj = datetime.strptime(steam_game.release_date, "%d %b, %Y")
-                                return (-date_obj.timestamp(), game_name)
-                            except ValueError:
-                                return (0, game_name)
+                        # Games not owned on Steam go to end, sorted alphabetically
                         return (0, game_name)
-                    elif sort_type == "rating":
-                        rating = steam_game.rating if steam_game.rating else 0
-                        return (-rating, game_name)
-                    else:
-                        return (0, game_name)
+                    # Higher playtime first, then alphabetical
+                    return (-steam_game.playtime_forever, game_name)
 
                 # Sort the priority list
-                sorted_priority = sorted(current_priority, key=get_sort_key)
-                print(f"Sorted priority list: {sorted_priority}")
+                sorted_priority = sorted(current_priority, key=get_playtime_sort_key)
+                print(f"Sorted by playtime: owned games first by playtime, then non-owned games")
 
-                # Update the settings and GUI
-                self._settings.priority = sorted_priority
-                self._settings.alter()
-
-                # Update the GUI listbox (schedule on main thread)
-                def update_gui():
-                    try:
-                        self._priority_list.delete(0, "end")
-                        self._priority_list.insert("end", *sorted_priority)
-                    except Exception as e:
-                        print(f"Error updating GUI: {e}")
-
-                # Schedule GUI update on main thread
-                self._root.after_idle(update_gui)
-
-                print(f"Successfully sorted by {sort_type}")
+                self._update_priority_list_safely(sorted_priority)
 
         except ImportError as e:
             print(f"Steam API module not available: {e}")
         except Exception as e:
-            print(f"Steam sorting error: {e}")
+            print(f"Steam playtime sorting error: {e}")
             import traceback
             traceback.print_exc()
+
+    async def _simple_sort_by_release_date(self):
+        """Simple sort by game name as fallback for release date (could be enhanced with IGDB)."""
+        try:
+            current_priority = list(self._settings.priority)
+            if not current_priority:
+                print("No games in priority list to sort")
+                return
+
+            print(f"Sorting {len(current_priority)} games by name (release date sorting would require IGDB API)")
+
+            # Simple alphabetical sort as placeholder
+            sorted_priority = sorted(current_priority, key=str.lower)
+            print("Sorted alphabetically (placeholder for release date sorting)")
+
+            self._update_priority_list_safely(sorted_priority)
+
+        except Exception as e:
+            print(f"Release date sorting error: {e}")
+
+    async def _simple_sort_by_rating(self):
+        """Simple sort by game name as fallback for rating (could be enhanced with IGDB)."""
+        try:
+            current_priority = list(self._settings.priority)
+            if not current_priority:
+                print("No games in priority list to sort")
+                return
+
+            print(f"Sorting {len(current_priority)} games by reverse name (rating sorting would require IGDB API)")
+
+            # Simple reverse alphabetical sort as placeholder
+            sorted_priority = sorted(current_priority, key=str.lower, reverse=True)
+            print("Sorted reverse alphabetically (placeholder for rating sorting)")
+
+            self._update_priority_list_safely(sorted_priority)
+
+        except Exception as e:
+            print(f"Rating sorting error: {e}")
+
+    def _update_priority_list_safely(self, sorted_priority: list[str]):
+        """Safely update the priority list and GUI from any thread."""
+        # Update the settings
+        self._settings.priority = sorted_priority
+        self._settings.alter()
+
+        # Update GUI safely
+        def update_gui():
+            try:
+                self._priority_list.delete(0, "end")
+                self._priority_list.insert("end", *sorted_priority)
+                print(f"GUI updated with {len(sorted_priority)} games")
+            except Exception as e:
+                print(f"Error updating GUI: {e}")
+
+        # Try to schedule on main thread, with fallback
+        try:
+            if hasattr(self._root, 'after_idle'):
+                self._root.after_idle(update_gui)
+            else:
+                print("Warning: Could not schedule GUI update - after_idle not available")
+        except RuntimeError as e:
+            print(f"Warning: Could not schedule GUI update - {e}")
+        except Exception as e:
+            print(f"Unexpected error scheduling GUI update: {e}")
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
