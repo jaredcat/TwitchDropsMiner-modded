@@ -1534,14 +1534,15 @@ class SettingsPanel:
         center_frame = ttk.Frame(master)
         center_frame.grid(column=0, row=0, sticky="nsew")
         center_frame.rowconfigure(0, weight=1)
-        center_frame.columnconfigure(0, weight=1)
-        center_frame.columnconfigure(1, weight=1)
-        center_frame.columnconfigure(2, weight=1)
+        # Balanced layout with appropriate minimum sizes
+        center_frame.columnconfigure(0, weight=1, minsize=350)  # General section - adequate space
+        center_frame.columnconfigure(1, weight=1, minsize=280)  # Priority section - constrained
+        center_frame.columnconfigure(2, weight=1, minsize=280)  # Exclude section - constrained
         # General section
         general_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "general", "name")
         )
-        general_frame.grid(column=0, row=0, sticky="nsew")
+        general_frame.grid(column=0, row=0, sticky="nsew", padx=(8, 8), ipadx=10)
         # use another frame to contain the options within the section
         general_frame.rowconfigure(0, weight=1)
         general_frame.columnconfigure(0, weight=1)
@@ -1645,13 +1646,13 @@ class SettingsPanel:
         )
         self._proxy.config(validatecommand=partial(proxy_validate, self._proxy, self._settings))
         self._proxy.grid(column=0, row=1)
-        # Priority section
+        # Priority section - with width constraint
         priority_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "priority")
         )
-        priority_frame.grid(column=1, row=0, sticky="nsew")
+        priority_frame.grid(column=1, row=0, sticky="nsew", padx=(8, 4), ipadx=10)
         self._priority_entry = PlaceholderCombobox(
-            priority_frame, placeholder=_("gui", "settings", "game_name"), width=30
+            priority_frame, placeholder=_("gui", "settings", "game_name"), width=25
         )
         self._priority_entry.grid(column=0, row=0, sticky="ew")
         priority_frame.columnconfigure(0, weight=1)
@@ -1703,13 +1704,13 @@ class SettingsPanel:
             priority_frame, text="❌", command=self.priority_delete, width=2, style="Large.TButton"
         ).grid(column=1, row=3, sticky="ns")
         priority_frame.rowconfigure(3, weight=1)
-        # Exclude section
+        # Exclude section - with width constraint
         exclude_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "exclude")
         )
-        exclude_frame.grid(column=2, row=0, sticky="nsew")
+        exclude_frame.grid(column=2, row=0, sticky="nsew", padx=(4, 8), ipadx=10)
         self._exclude_entry = PlaceholderCombobox(
-            exclude_frame, placeholder=_("gui", "settings", "game_name"), width=26
+            exclude_frame, placeholder=_("gui", "settings", "game_name"), width=22
         )
         self._exclude_entry.grid(column=0, row=0, sticky="ew")
         ttk.Button(
@@ -1731,9 +1732,9 @@ class SettingsPanel:
         ttk.Button(
             exclude_frame, text="❌", command=self.exclude_delete, width=2, style="Large.TButton"
         ).grid(column=0, row=2, columnspan=2, sticky="ew")
-        # Reload button
+        # Reload button - with better spacing
         reload_frame = ttk.Frame(center_frame)
-        reload_frame.grid(column=0, row=1, columnspan=3, pady=4)
+        reload_frame.grid(column=0, row=1, columnspan=3, pady=(16, 8), padx=16)
         ttk.Label(reload_frame, text=_("gui", "settings", "reload_text")).grid(column=0, row=0)
         ttk.Button(
             reload_frame,
