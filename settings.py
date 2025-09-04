@@ -83,6 +83,8 @@ class Settings:
     window_position: str
     steam_api_key: str
     steam_id: str
+    igdb_client_id: str
+    igdb_access_token: str
 
     PASSTHROUGH = ("_settings", "_args", "_altered")
 
@@ -112,6 +114,14 @@ class Settings:
                 self._settings["priority_algorithm"] = (
                     PRIORITY_ALGORITHM_LIST  # Default to ordered list for existing users
                 )
+
+        # Migration: Add new IGDB fields if they don't exist
+        if "igdb_client_id" not in self._settings:
+            self._settings["igdb_client_id"] = ""
+            self._altered = True
+        if "igdb_access_token" not in self._settings:
+            self._settings["igdb_access_token"] = ""
+            self._altered = True
 
     # default logic of reading settings is to check args first, then the settings file
     def __getattr__(self, name: str, /) -> Any:
