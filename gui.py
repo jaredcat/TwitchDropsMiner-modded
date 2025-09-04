@@ -1534,15 +1534,15 @@ class SettingsPanel:
         center_frame = ttk.Frame(master)
         center_frame.grid(column=0, row=0, sticky="nsew")
         center_frame.rowconfigure(0, weight=1)
-        # Balanced layout with appropriate minimum sizes
-        center_frame.columnconfigure(0, weight=1, minsize=350)  # General section - adequate space
-        center_frame.columnconfigure(1, weight=1, minsize=280)  # Priority section - constrained
-        center_frame.columnconfigure(2, weight=1, minsize=280)  # Exclude section - constrained
+        # Simple equal column layout
+        center_frame.columnconfigure(0, weight=1)
+        center_frame.columnconfigure(1, weight=1)
+        center_frame.columnconfigure(2, weight=1)
         # General section
         general_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "general", "name")
         )
-        general_frame.grid(column=0, row=0, sticky="nsew", padx=(8, 8), ipadx=10)
+        general_frame.grid(column=0, row=0, sticky="nsew")
         # use another frame to contain the options within the section
         general_frame.rowconfigure(0, weight=1)
         general_frame.columnconfigure(0, weight=1)
@@ -1650,9 +1650,9 @@ class SettingsPanel:
         priority_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "priority")
         )
-        priority_frame.grid(column=1, row=0, sticky="nsew", padx=(8, 4), ipadx=10)
+        priority_frame.grid(column=1, row=0, sticky="nsew")
         self._priority_entry = PlaceholderCombobox(
-            priority_frame, placeholder=_("gui", "settings", "game_name"), width=25
+            priority_frame, placeholder=_("gui", "settings", "game_name"), width=30
         )
         self._priority_entry.grid(column=0, row=0, sticky="ew")
         priority_frame.columnconfigure(0, weight=1)
@@ -1671,11 +1671,18 @@ class SettingsPanel:
         self._priority_list.grid(column=0, row=1, rowspan=3, sticky="nsew")
         self._priority_list.insert("end", *self._settings.priority)
 
-        # Add drag and drop functionality
-        self._drag_data = {"item": None, "index": None}
+        # Add drag and drop functionality with visual feedback
+        self._drag_data = {"item": None, "index": None, "dragging": False}
         self._priority_list.bind("<Button-1>", self._on_priority_drag_start)
         self._priority_list.bind("<B1-Motion>", self._on_priority_drag_motion)
         self._priority_list.bind("<ButtonRelease-1>", self._on_priority_drag_release)
+        self._priority_list.bind("<Leave>", self._on_priority_drag_leave)
+
+        # Add a label for drag feedback (initially hidden)
+        self._drag_feedback_label = ttk.Label(priority_frame, text="",
+                                            foreground="blue", font=("TkDefaultFont", 9, "italic"))
+        self._drag_feedback_label.grid(column=0, row=4, columnspan=2, sticky="ew")
+        self._drag_feedback_label.grid_remove()  # Hide initially
 
         # Add right-click context menu
         self._priority_menu = tk.Menu(self._priority_list, tearoff=0)
@@ -1708,9 +1715,9 @@ class SettingsPanel:
         exclude_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "exclude")
         )
-        exclude_frame.grid(column=2, row=0, sticky="nsew", padx=(4, 8), ipadx=10)
+        exclude_frame.grid(column=2, row=0, sticky="nsew")
         self._exclude_entry = PlaceholderCombobox(
-            exclude_frame, placeholder=_("gui", "settings", "game_name"), width=22
+            exclude_frame, placeholder=_("gui", "settings", "game_name"), width=26
         )
         self._exclude_entry.grid(column=0, row=0, sticky="ew")
         ttk.Button(
@@ -1732,9 +1739,9 @@ class SettingsPanel:
         ttk.Button(
             exclude_frame, text="❌", command=self.exclude_delete, width=2, style="Large.TButton"
         ).grid(column=0, row=2, columnspan=2, sticky="ew")
-        # Reload button - with better spacing
+        # Reload button
         reload_frame = ttk.Frame(center_frame)
-        reload_frame.grid(column=0, row=1, columnspan=3, pady=(16, 8), padx=16)
+        reload_frame.grid(column=0, row=1, columnspan=3, pady=4)
         ttk.Label(reload_frame, text=_("gui", "settings", "reload_text")).grid(column=0, row=0)
         ttk.Button(
             reload_frame,
@@ -1952,7 +1959,7 @@ class SettingsPanel:
             # Update dropdown options to reflect the change
             self._update_dropdown_options()
 
-    # Drag and drop methods for priority list
+    # Drag and drop methods for priority list with enhanced visual feedback
     def _on_priority_drag_start(self, event):
         """Start drag operation - record the item being dragged."""
         widget = event.widget
@@ -1960,17 +1967,51 @@ class SettingsPanel:
         if index < widget.size():
             self._drag_data["index"] = index
             self._drag_data["item"] = widget.get(index)
+            self._drag_data["dragging"] = False
+            # Initial selection with drag source styling
             widget.selection_clear(0, "end")
             widget.selection_set(index)
+            # Configure drag source appearance
+            widget.configure(cursor="hand2")
 
     def _on_priority_drag_motion(self, event):
-        """Handle drag motion - provide visual feedback."""
+        """Handle drag motion - provide rich visual feedback."""
         widget = event.widget
-        index = widget.nearest(event.y)
-        if index < widget.size() and self._drag_data["item"] is not None:
-            # Clear previous selection and show current drop target
+        current_index = widget.nearest(event.y)
+
+        if self._drag_data["item"] is not None:
+            # Mark that we're actively dragging
+            if not self._drag_data["dragging"]:
+                self._drag_data["dragging"] = True
+                widget.configure(cursor="exchange")
+                # Show drag feedback
+                self._drag_feedback_label.config(text=f"📦 Dragging: {self._drag_data['item']}")
+                self._drag_feedback_label.grid()
+
+            # Clear all previous selections and highlights
             widget.selection_clear(0, "end")
-            widget.selection_set(index)
+
+            # Highlight the drag source with different color
+            drag_index = self._drag_data["index"]
+            if drag_index is not None and drag_index < widget.size():
+                widget.selection_set(drag_index)
+                # Make the dragged item appear dimmed/different
+                widget.activate(drag_index)
+
+            # Highlight the drop target if it's different from source
+            if (current_index < widget.size() and
+                current_index != drag_index):
+                # Create visual separator line effect by manipulating selection
+                if current_index > drag_index:
+                    # Dragging down - highlight the line below target
+                    for i in range(drag_index + 1, current_index + 1):
+                        if i < widget.size():
+                            widget.selection_set(i)
+                else:
+                    # Dragging up - highlight the line above target
+                    for i in range(current_index, drag_index):
+                        if i < widget.size():
+                            widget.selection_set(i)
 
     def _on_priority_drag_release(self, event):
         """Complete drag operation - move the item to new position."""
@@ -1978,16 +2019,41 @@ class SettingsPanel:
         drop_index = widget.nearest(event.y)
         drag_index = self._drag_data["index"]
 
-        if (self._drag_data["item"] is not None and
+        # Reset cursor
+        widget.configure(cursor="")
+
+        # Only move if we were actually dragging and it's a valid move
+        if (self._drag_data["dragging"] and
+            self._drag_data["item"] is not None and
             drag_index is not None and
             drop_index < widget.size() and
             drag_index != drop_index):
 
             # Perform the move operation
             self._priority_move_item(drag_index, drop_index)
+        else:
+            # Just clean up selection if no move occurred
+            widget.selection_clear(0, "end")
+            if drag_index is not None and drag_index < widget.size():
+                widget.selection_set(drag_index)
 
-        # Clear drag data
-        self._drag_data = {"item": None, "index": None}
+        # Clear drag data and hide feedback
+        self._drag_data = {"item": None, "index": None, "dragging": False}
+        self._drag_feedback_label.grid_remove()
+
+    def _on_priority_drag_leave(self, event):
+        """Handle when mouse leaves the listbox during drag."""
+        widget = event.widget
+        if self._drag_data["dragging"]:
+            # Reset cursor and clear highlights when leaving
+            widget.configure(cursor="no")
+            widget.selection_clear(0, "end")
+            # Keep only the source item selected
+            drag_index = self._drag_data["index"]
+            if drag_index is not None and drag_index < widget.size():
+                widget.selection_set(drag_index)
+            # Update feedback to show invalid drop zone
+            self._drag_feedback_label.config(text=f"❌ Invalid drop zone - return to list")
 
     def _priority_move_item(self, from_index: int, to_index: int):
         """Move an item from one position to another in the priority list."""
