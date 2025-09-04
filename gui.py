@@ -1741,7 +1741,7 @@ class SettingsPanel:
 
         self._igdb_sort_release = ttk.Button(
             igdb_sorting_frame,
-            text="📅",
+            text=_("gui", "settings", "sorting", "release_date"),
             command=self._igdb_sort_by_release_date,
             state="disabled",
             width=3
@@ -1750,12 +1750,21 @@ class SettingsPanel:
 
         self._igdb_sort_rating = ttk.Button(
             igdb_sorting_frame,
-            text="⭐",
+            text=_("gui", "settings", "sorting", "rating"),
             command=self._igdb_sort_by_rating,
             state="disabled",
             width=3
         )
         self._igdb_sort_rating.grid(column=1, row=0, padx=1, pady=1)
+
+        self._igdb_sort_popularity = ttk.Button(
+            igdb_sorting_frame,
+            text=_("gui", "settings", "sorting", "popularity"),
+            command=self._igdb_sort_by_popularity,
+            state="disabled",
+            width=3
+        )
+        self._igdb_sort_popularity.grid(column=2, row=0, padx=1, pady=1)
 
         # Initialize button states after all buttons are created
         self._update_igdb_button_states()
@@ -2253,11 +2262,12 @@ class SettingsPanel:
             has_client_id = bool(self._settings.igdb_client_id.strip())
             has_client_secret = bool(self._settings.igdb_client_secret.strip())
 
-            # Both release date and rating sorting require IGDB credentials
+            # All IGDB sorting requires credentials
             button_state = "normal" if (has_client_id and has_client_secret) else "disabled"
 
             self._igdb_sort_release.config(state=button_state)
             self._igdb_sort_rating.config(state=button_state)
+            self._igdb_sort_popularity.config(state=button_state)
 
             if not (has_client_id and has_client_secret):
                 print("IGDB sorting disabled - Client ID or Client Secret missing")
@@ -2450,6 +2460,84 @@ class SettingsPanel:
             import traceback
             traceback.print_exc()
 
+    def _igdb_sort_by_popularity(self):
+        """Sort priority list by IGDB popularity."""
+        print("=== IGDB sort by popularity clicked ===")
+        try:
+            import logging
+            logging.getLogger("TwitchDrops").info("IGDB sort (popularity) clicked")
+        except Exception:
+            pass
+
+        current_priority = list(self._settings.priority)
+        if not current_priority:
+            print("No games in priority list")
+            return
+
+        print(f"Sorting {len(current_priority)} games by popularity using IGDB")
+
+        # Check if we have IGDB credentials
+        if not self._settings.igdb_client_id or not self._settings.igdb_client_secret:
+            print("IGDB credentials missing - keeping original priority order")
+            return
+
+        try:
+            import asyncio
+            from igdb_api import IGDBAPIClient
+
+            async def sort_games():
+                async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_client_secret) as igdb_client:
+                    # Use inventory games instead of wanted_games
+                    inventory_games = {campaign.game: 1 for campaign in self._manager._twitch.inventory}
+                    return await igdb_client.sort_games_by_popularity(current_priority, inventory_games)
+
+            # Use existing event loop or create a new one
+            try:
+                loop = asyncio.get_running_loop()
+                # If we're in an existing loop, we need to run in a thread
+                import threading
+                import concurrent.futures
+
+                def run_in_thread():
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    try:
+                        return new_loop.run_until_complete(sort_games())
+                    finally:
+                        new_loop.close()
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_in_thread)
+                    sorted_priority = future.result(timeout=60)
+            except RuntimeError:
+                # No running loop, create a new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    sorted_priority = loop.run_until_complete(sort_games())
+                finally:
+                    loop.close()
+
+            print(f"Sorted {len(sorted_priority)} games by popularity")
+
+            # Update the priority list
+            self._settings.priority = sorted_priority
+            self._settings.alter()
+            self._settings.save(force=True)
+
+            # Update GUI
+            self._priority_list.delete(0, tk.END)
+            for game in sorted_priority:
+                self._priority_list.insert(tk.END, game)
+
+            print("Priority list updated successfully")
+
+        except ImportError as e:
+            print(f"IGDB API module not available: {e}")
+        except Exception as e:
+            print(f"IGDB API error: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _igdb_client_id_validate(self, entry: PlaceholderEntry) -> bool:
         """Validate IGDB Client ID input."""
@@ -2472,6 +2560,7 @@ class SettingsPanel:
         try:
             self._igdb_sort_release.config(state="normal", text="📅")
             self._igdb_sort_rating.config(state="normal", text="⭐")
+            self._igdb_sort_popularity.config(state="normal", text="🔥")
             self._update_igdb_button_states()
         except Exception as e:
             print(f"Error restoring IGDB buttons: {e}")

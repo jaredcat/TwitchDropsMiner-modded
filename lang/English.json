@@ -167,9 +167,9 @@
       "reload_text": "Most changes require a reload to take an immediate effect: ",
       "sorting": {
         "name": "Sorting",
-        "playtime": "Sort by Playtime ⏱️",
-        "release_date": "Sort by Release Date 📅",
-        "rating": "Sort by Rating ⭐"
+        "release_date": "Release Date 📅",
+        "rating": "Rating ⭐",
+        "popularity": "Popularity 🔥"
       },
       "priority_context_menu": {
         "move_to_top": "Move to Top",

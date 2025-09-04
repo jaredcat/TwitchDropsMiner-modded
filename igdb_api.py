@@ -295,7 +295,7 @@ class IGDBAPIClient:
         print(f"Searching IGDB for {len(game_names)} games by name")
 
         # Process in batches to avoid API limits
-        batch_size = 20  # Smaller batches for name searches
+        batch_size = 50  # Smaller batches for name searches
         all_games = []
 
         for i in range(0, len(game_names), batch_size):
@@ -386,6 +386,52 @@ class IGDBAPIClient:
             return game.rating if game.rating is not None else 0.0
 
         return sorted(games, key=get_rating_key, reverse=reverse)
+
+
+    async def get_popularity_data(self, game_ids: List[int]) -> Dict[int, int]:
+        """Get popularity data for specific game IDs from popularity_primitives endpoint."""
+        if not game_ids:
+            return {}
+
+        print(f"Fetching popularity data for {len(game_ids)} games")
+
+        # Batch process game IDs
+        batch_size = 500
+        popularity_data = {}
+
+        for i in range(0, len(game_ids), batch_size):
+            batch_ids = game_ids[i:i + batch_size]
+            print(f"Processing popularity batch {i//batch_size + 1}: {len(batch_ids)} games")
+
+            # Build query for popularity_primitives endpoint
+            ids_str = ",".join(map(str, batch_ids))
+            query = f"""
+            fields game_id,value,popularity_type;
+            where game_id = ({ids_str}) & popularity_type = 1;
+            sort value desc;
+            limit {len(batch_ids)};
+            """
+
+            try:
+                data = await self._make_request("popularity_primitives", query)
+                print(f"Popularity API returned {len(data)} entries for batch")
+
+                for entry in data:
+                    game_id = entry.get("game_id")
+                    value = entry.get("value", 0)
+                    if game_id is not None:
+                        popularity_data[game_id] = value
+
+                # Small delay between batches
+                if i + batch_size < len(game_ids):
+                    await asyncio.sleep(0.5)
+
+            except IGDBAPIError as e:
+                print(f"Failed to fetch popularity data for batch: {e}")
+                continue
+
+        print(f"Retrieved popularity data for {len(popularity_data)} games")
+        return popularity_data
 
     def clear_igdb_cache(self):
         """Clear IGDB data cache."""
@@ -487,7 +533,7 @@ class IGDBAPIClient:
                 return "9999-12-31"  # Put games without dates at the end
             return release_date
 
-        return sorted(game_names, key=get_release_date)
+        return sorted(game_names, key=get_release_date, reverse=True)  # Newest first
 
     async def sort_games_by_rating(self, game_names: List[str], twitch_games: Dict) -> List[str]:
         """Sort game names by IGDB rating (highest first)."""
@@ -551,3 +597,70 @@ class IGDBAPIClient:
             return rating
 
         return sorted(game_names, key=get_rating, reverse=True)
+
+    async def sort_games_by_popularity(self, game_names: List[str], twitch_games: Dict) -> List[str]:
+        """Sort game names by IGDB popularity (highest first)."""
+        if not game_names:
+            return game_names
+
+        print(f"Sorting {len(game_names)} games by popularity")
+
+        # First try to get IGDB IDs from Twitch drops
+        game_ids = []
+        found_by_id = []
+        for game_name in game_names:
+            found = False
+            for game in twitch_games.keys():
+                if game.name == game_name:
+                    game_ids.append(game.id)
+                    found_by_id.append(game_name)
+                    found = True
+                    break
+            if not found:
+                print(f"Game not found in Twitch drops: {game_name}")
+
+        print(f"Found {len(game_ids)} games in Twitch drops, {len(game_names) - len(game_ids)} need name search")
+
+        # Get IGDB data for games found in drops
+        games_data = []
+        if game_ids:
+            # Pass the corresponding game names for better caching
+            found_game_names = [name for name in found_by_id]
+            games_data = await self.get_games_data(game_ids, found_game_names)
+            print(f"Retrieved IGDB data for {len(games_data)} games from drops")
+
+        # For games not found in drops, search by name
+        games_not_found = [name for name in game_names if name not in found_by_id]
+        if games_not_found:
+            print(f"Searching IGDB by name for {len(games_not_found)} games")
+            name_search_results = await self.search_games_by_names(games_not_found)
+            games_data.extend(name_search_results)
+            print(f"Found {len(name_search_results)} additional games by name search")
+
+        if not games_data:
+            print("No IGDB data found - keeping original order")
+            return game_names
+
+        # Get popularity data for all games
+        all_game_ids = [game.igdb_id for game in games_data]
+        popularity_data = await self.get_popularity_data(all_game_ids)
+
+        # Create mapping of game names to IGDB data including popularity
+        igdb_data = {}
+        for game in games_data:
+            popularity = popularity_data.get(game.igdb_id, 0)
+            igdb_data[game.name] = {
+                "release_date": game.release_date,
+                "rating": game.rating,
+                "popularity": popularity
+            }
+
+        print(f"Found IGDB data for {len(igdb_data)} games total")
+
+        # Sort by popularity (highest first)
+        def get_popularity(game_name):
+            game_data = igdb_data.get(game_name, {})
+            popularity = game_data.get("popularity", 0)
+            return popularity
+
+        return sorted(game_names, key=get_popularity, reverse=True)
