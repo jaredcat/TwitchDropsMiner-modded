@@ -202,48 +202,67 @@ class IGDBAPIClient:
         if not game_ids:
             return []
 
-        # Check cache first
-        cache_key = self._get_cache_key("games_data")
-        cached_data = self._get_cached_data(cache_key)
+        print(f"Requesting IGDB data for {len(game_ids)} games: {game_ids[:10]}{'...' if len(game_ids) > 10 else ''}")
 
-        if cached_data is not None:
-            # Filter cached data to only include requested game IDs
-            cached_games = []
-            for game_data in cached_data:
-                if game_data["id"] in game_ids:
-                    cached_games.append(game_data)
+        # Check individual game cache first
+        results = []
+        uncached_ids = []
 
-            if len(cached_games) == len(game_ids):
-                print(f"Using cached IGDB data for {len(game_ids)} games")
-                return [self._create_game_from_data(game_data) for game_data in cached_games]
+        for game_id in game_ids:
+            cache_key = self._get_cache_key(f"game_{game_id}")
+            cached_data = self._get_cached_data(cache_key)
 
-        print(f"Fetching IGDB data for {len(game_ids)} games")
+            if cached_data is not None:
+                game = self._create_game_from_data(cached_data)
+                results.append(game)
+                print(f"Using cached data for game ID {game_id}")
+            else:
+                uncached_ids.append(game_id)
 
-        # Build query for IGDB API
-        ids_str = ",".join(map(str, game_ids))
-        query = f"""
-        fields id,name,first_release_date,rating,rating_count;
-        where id = ({ids_str});
-        limit {len(game_ids)};
-        """
+        if not uncached_ids:
+            print(f"All {len(game_ids)} games found in cache")
+            return results
 
-        try:
-            data = await self._make_request("games", query)
+        print(f"Fetching IGDB data for {len(uncached_ids)} uncached games")
 
-            games = []
-            for game_data in data:
-                game = self._create_game_from_data(game_data)
-                games.append(game)
+        # Process in batches to avoid API limits
+        batch_size = 50  # IGDB allows up to 500, but let's be conservative
+        all_games = results.copy()
 
-            # Cache the results
-            self._cache_data(cache_key, data)
-            print(f"Cached IGDB data for {len(games)} games")
+        for i in range(0, len(uncached_ids), batch_size):
+            batch_ids = uncached_ids[i:i + batch_size]
+            print(f"Processing batch {i//batch_size + 1}: {len(batch_ids)} games")
 
-            return games
+            # Build query for IGDB API
+            ids_str = ",".join(map(str, batch_ids))
+            query = f"""
+            fields id,name,first_release_date,rating,rating_count;
+            where id = ({ids_str});
+            limit {len(batch_ids)};
+            """
 
-        except IGDBAPIError as e:
-            logger.error(f"Failed to get IGDB games data: {e}")
-            return []
+            try:
+                data = await self._make_request("games", query)
+                print(f"IGDB API returned {len(data)} games for batch")
+
+                for game_data in data:
+                    game = self._create_game_from_data(game_data)
+                    all_games.append(game)
+
+                    # Cache individual game
+                    cache_key = self._get_cache_key(f"game_{game_data['id']}")
+                    self._cache_data(cache_key, game_data)
+
+                # Small delay between batches to be respectful to the API
+                if i + batch_size < len(uncached_ids):
+                    await asyncio.sleep(0.5)
+
+            except IGDBAPIError as e:
+                print(f"Failed to get IGDB games data for batch: {e}")
+                continue
+
+        print(f"Successfully processed {len(all_games)} games total")
+        return all_games
 
     def _create_game_from_data(self, game_data: Dict[str, Any]) -> IGDBGame:
         """Create IGDBGame object from API response data."""
@@ -324,13 +343,25 @@ class IGDBAPIClient:
         if not game_names:
             return game_names
 
+        print(f"Sorting {len(game_names)} games by release date")
+        print(f"Available Twitch games: {len(twitch_games)}")
+
         # Get game IDs from Twitch data
         game_ids = []
+        found_games = []
         for game_name in game_names:
+            found = False
             for game in twitch_games.keys():
                 if game.name == game_name:
                     game_ids.append(game.id)
+                    found_games.append(game_name)
+                    found = True
                     break
+            if not found:
+                print(f"Game not found in Twitch data: {game_name}")
+
+        print(f"Found {len(game_ids)} IGDB game IDs out of {len(game_names)} games")
+        print(f"Game IDs: {game_ids[:10]}{'...' if len(game_ids) > 10 else ''}")
 
         if not game_ids:
             print("No IGDB game IDs found - keeping original order")
@@ -368,13 +399,25 @@ class IGDBAPIClient:
         if not game_names:
             return game_names
 
+        print(f"Sorting {len(game_names)} games by rating")
+        print(f"Available Twitch games: {len(twitch_games)}")
+
         # Get game IDs from Twitch data
         game_ids = []
+        found_games = []
         for game_name in game_names:
+            found = False
             for game in twitch_games.keys():
                 if game.name == game_name:
                     game_ids.append(game.id)
+                    found_games.append(game_name)
+                    found = True
                     break
+            if not found:
+                print(f"Game not found in Twitch data: {game_name}")
+
+        print(f"Found {len(game_ids)} IGDB game IDs out of {len(game_names)} games")
+        print(f"Game IDs: {game_ids[:10]}{'...' if len(game_ids) > 10 else ''}")
 
         if not game_ids:
             print("No IGDB game IDs found - keeping original order")
