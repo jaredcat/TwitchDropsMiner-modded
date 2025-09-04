@@ -2415,14 +2415,20 @@ class SettingsPanel:
 
         try:
             # Store the sorted list for the event handler to access
+            logger.info("Storing sorted priority list...")
             self._pending_sorted_priority = sorted_priority
+            logger.info(f"Stored {len(sorted_priority)} games")
+
             # Generate a custom event that will be handled in the main thread
+            logger.info("About to generate event...")
             self._manager._root.event_generate("<<priority_list_updated>>", when="tail")
             logger.info("GUI update event generated successfully")
         except Exception as e:
             logger.error(f"Failed to generate GUI update event: {e}")
             import traceback
             logger.error(traceback.format_exc())
+
+        logger.info("_update_priority_list_safely method completed")
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
@@ -2781,6 +2787,22 @@ class GUIManager:
             root.protocol("WM_DESTROY_WINDOW", self.close)
         # Bind custom events for thread-safe GUI updates
         root.bind("<<priority_list_updated>>", self._handle_priority_list_update)
+
+        # Test event binding by scheduling a test event
+        def test_event_binding():
+            try:
+                import logging
+                logger = logging.getLogger("TwitchDrops")
+                logger.info("Testing event binding...")
+                root.event_generate("<<priority_list_updated>>", when="tail")
+                logger.info("Test event generated successfully")
+            except Exception as e:
+                import logging
+                logger = logging.getLogger("TwitchDrops")
+                logger.error(f"Test event failed: {e}")
+
+        # Schedule test after GUI is ready
+        root.after_idle(test_event_binding)
 
         # stay hidden in tray if needed, otherwise show the window when everything's ready
         if self._twitch.settings.tray:
