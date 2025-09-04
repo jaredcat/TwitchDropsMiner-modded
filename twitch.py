@@ -1904,7 +1904,7 @@ class Twitch:
                 if stream_channel_data["node"]["broadcaster"]:
                     streams.append(Channel.from_directory(self, stream_channel_data["node"], drops_enabled=True))
                 else:
-                    self.gui.print(f'Could not load Channel for {stream_channel_data["node"]["game"]["name"]}.\n↳ Stream Title: "{stream_channel_data["node"]["title"]}"')
+                    self.gui.print(f'Could not load Channel for {stream_channel_data["node"]["game"]["name"]}.\n-> Stream Title: "{stream_channel_data["node"]["title"]}"')
             return streams
         return []
 

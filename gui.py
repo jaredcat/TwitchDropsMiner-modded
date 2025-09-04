@@ -1707,7 +1707,7 @@ class SettingsPanel:
 
         # Steam sorting buttons frame
         steam_sorting_frame = ttk.Frame(priority_frame)
-        steam_sorting_frame.grid(column=0, row=1, columnspan=2, sticky="ew")
+        steam_sorting_frame.grid(column=0, row=1, columnspan=1, sticky="ew")
         # Configure row to be minimal height (no weight)
         steam_sorting_frame.rowconfigure(0, weight=0)
 
@@ -1779,7 +1779,7 @@ class SettingsPanel:
             text="▲",
             style="Large.TButton",
             command=partial(self.priority_move, True),
-        ).grid(column=1, row=1, sticky="ns")
+        ).grid(column=2, row=0, sticky="ns")
         # Don't give weight to row 1 (Steam buttons row) - keep it minimal
         priority_frame.rowconfigure(1, weight=0)
         ttk.Button(
@@ -2299,9 +2299,9 @@ class SettingsPanel:
 
             # Use context manager for proper resource cleanup
             async with SteamAPIClient(self._settings.steam_api_key) as steam_client:
-                # Get user's games data
+                # Get user's games data - only for priority list games
                 print(f"Fetching Steam data for user {steam_id}")
-                games_data = await steam_client.get_user_games_data(steam_id)
+                games_data = await steam_client.get_user_games_data(steam_id, current_priority)
                 print(f"Retrieved {len(games_data)} games from Steam")
 
                 # Create a mapping of game names to Steam data

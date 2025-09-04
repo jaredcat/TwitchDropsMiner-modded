@@ -242,8 +242,15 @@ def json_load(path: Path, defaults: _JSON_T, *, merge: bool = True) -> _JSON_T:
 
 def json_save(path: Path, contents: Mapping[Any, Any], *, sort: bool = False) -> None:
     try:
+        # Create a copy to avoid modifying the original
+        contents_copy = dict(contents)
+
+        # If this is settings and contains an exclude set, ensure it's sorted alphabetically
+        if "exclude" in contents_copy and isinstance(contents_copy["exclude"], set):
+            contents_copy["exclude"] = sorted(contents_copy["exclude"])
+
         with open(path, 'w', encoding="utf8") as file:
-            json.dump(contents, file, default=_serialize, sort_keys=sort, indent=4)
+            json.dump(contents_copy, file, default=_serialize, sort_keys=sort, indent=4)
     except OSError as e:
         logger.warning(f"Failed to save {path}: {e}")
 

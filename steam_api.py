@@ -279,8 +279,18 @@ class SteamAPIClient:
 
         return enriched_games
 
-    async def get_user_games_data(self, steam_id: str) -> List[SteamGame]:
-        """Get complete game data for a user (owned games + details) with persistent caching."""
+    async def get_user_games_data(self, steam_id: str, priority_games: Optional[List[str]] = None) -> List[SteamGame]:
+        """Get complete game data for a user (owned games + details) with persistent caching.
+
+        Args:
+            steam_id: Steam user ID
+            priority_games: Optional list of game names to filter by. If provided, only these games will be enriched.
+        """
+        if priority_games:
+            print(f"Fetching Steam data for {len(priority_games)} priority games")
+            return await self._get_priority_games_data(steam_id, priority_games)
+
+        # Legacy behavior - get all games (kept for compatibility)
         cache_key = self._get_cache_key(steam_id, "games_data")
 
         # Check persistent cache first
@@ -325,6 +335,77 @@ class SteamAPIClient:
         print(f"Cached Steam games data for user {steam_id}")
 
         return enriched_games
+
+    async def _get_priority_games_data(self, steam_id: str, priority_games: List[str]) -> List[SteamGame]:
+        """Get Steam data for specific priority games only."""
+        # Check individual game cache first
+        results = []
+        uncached_games = []
+
+        for game_name in priority_games:
+            cache_key = self._get_cache_key(steam_id, f"game_{game_name.lower()}")
+            cached_data = self._get_cached_data(cache_key)
+
+            if cached_data is not None:
+                game = SteamGame(
+                    appid=cached_data["appid"],
+                    name=cached_data["name"],
+                    playtime_forever=cached_data["playtime_forever"],
+                    release_date=cached_data.get("release_date"),
+                    rating=cached_data.get("rating")
+                )
+                results.append(game)
+                print(f"Using cached data for {game_name}")
+            else:
+                uncached_games.append(game_name)
+
+        if not uncached_games:
+            print(f"All {len(priority_games)} priority games found in cache")
+            return results
+
+        print(f"Fetching Steam data for {len(uncached_games)} uncached priority games")
+
+        # Get all owned games (fast - just names and IDs)
+        owned_games = await self.get_owned_games(steam_id)
+        if not owned_games:
+            return results
+
+        # Create mapping for fast lookup
+        owned_games_map = {game.name.lower(): game for game in owned_games}
+
+        # Filter to only uncached priority games that user owns
+        priority_owned_games = []
+        for game_name in uncached_games:
+            owned_game = owned_games_map.get(game_name.lower())
+            if owned_game:
+                priority_owned_games.append(owned_game)
+                print(f"Found owned game: {game_name}")
+            else:
+                print(f"Game not owned on Steam: {game_name}")
+
+        if not priority_owned_games:
+            print("No priority games found in Steam library")
+            return results
+
+        print(f"Enriching {len(priority_owned_games)} priority games with details")
+        # Enrich only the priority games with details
+        enriched_games = await self.enrich_games_with_details(priority_owned_games)
+
+        # Cache individual games and add to results
+        for game in enriched_games:
+            cache_key = self._get_cache_key(steam_id, f"game_{game.name.lower()}")
+            cache_data = {
+                "appid": game.appid,
+                "name": game.name,
+                "playtime_forever": game.playtime_forever,
+                "release_date": game.release_date,
+                "rating": game.rating
+            }
+            self._cache_data(cache_key, cache_data)
+            results.append(game)
+
+        print(f"Successfully fetched data for {len(enriched_games)} priority games")
+        return results
 
     def clear_steam_cache(self, steam_id: Optional[str] = None):
         """Clear Steam data cache for a specific user or all users."""
