@@ -2264,16 +2264,9 @@ class SettingsPanel:
             # Both API key and Steam ID are required
             state = "normal" if (has_api_key and has_steam_id) else "disabled"
 
-            # Debug output
-            print(f"Steam button state update: API key={has_api_key}, Steam ID={has_steam_id}, State={state}")
-
-            # Only update if buttons exist (safety check)
-            if hasattr(self, '_steam_sort_playtime'):
-                self._steam_sort_playtime.config(state=state)
-            if hasattr(self, '_steam_sort_release'):
-                self._steam_sort_release.config(state=state)
-            if hasattr(self, '_steam_sort_rating'):
-                self._steam_sort_rating.config(state=state)
+            self._steam_sort_playtime.config(state=state)
+            self._steam_sort_release.config(state=state)
+            self._steam_sort_rating.config(state=state)
         except Exception as e:
             print(f"Steam button state update error: {e}")
 
@@ -2349,19 +2342,16 @@ class SettingsPanel:
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
-        print("Steam sort by playtime clicked")
         import asyncio
         asyncio.create_task(self._steam_sort_games("playtime"))
 
     def _steam_sort_by_release_date(self):
         """Sort priority list by Steam release date."""
-        print("Steam sort by release date clicked")
         import asyncio
         asyncio.create_task(self._steam_sort_games("release_date"))
 
     def _steam_sort_by_rating(self):
         """Sort priority list by Steam rating."""
-        print("Steam sort by rating clicked")
         import asyncio
         asyncio.create_task(self._steam_sort_games("rating"))
 

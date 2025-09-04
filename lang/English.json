@@ -24,7 +24,8 @@
         "incorrect_email_code": "Incorrect email code.",
         "incorrect_twofa_code": "Incorrect 2FA code.",
         "email_code_required": "Email code required. Check your email.",
-        "twofa_code_required": "2FA token required."
+        "twofa_code_required": "2FA token required.",
+        "device_activation_code": "Enter this code on the Twitch's device activation page:"
     },
     "error": {
         "captcha": "Your login attempt was denied by CAPTCHA.\nPlease try again in 12+ hours.",
