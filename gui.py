@@ -1500,7 +1500,8 @@ def proxy_validate(entry: PlaceholderEntry, settings: Settings) -> bool:
 class _SettingsVars(TypedDict):
     tray: IntVar
     proxy: StringVar
-    igdb_api_key: StringVar
+    igdb_client_id: StringVar
+    igdb_access_token: StringVar
     dark_theme: IntVar
     autostart: IntVar
     priority_only: IntVar
@@ -1658,7 +1659,7 @@ class SettingsPanel:
             igdb_api_frame,
             width=37,
             textvariable=self._vars["igdb_client_id"],
-            placeholder="Enter IGDB Client ID",
+            placeholder=_("gui", "settings", "general", "igdb_api", "client_id_placeholder"),
             is_password=True
         )
         self._igdb_client_id.config(
@@ -1674,7 +1675,7 @@ class SettingsPanel:
             igdb_token_frame,
             width=37,
             textvariable=self._vars["igdb_access_token"],
-            placeholder="Enter IGDB Access Token",
+            placeholder=_("gui", "settings", "general", "igdb_api", "access_token_placeholder"),
             is_password=True
         )
         self._igdb_access_token.config(

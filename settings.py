@@ -31,8 +31,6 @@ class SettingsFile(TypedDict):
     connection_quality: int
     tray_notifications: bool
     window_position: str
-    steam_api_key: str
-    steam_id: str
     igdb_client_id: str
     igdb_access_token: str
 
@@ -81,8 +79,6 @@ class Settings:
     connection_quality: int
     tray_notifications: bool
     window_position: str
-    steam_api_key: str
-    steam_id: str
     igdb_client_id: str
     igdb_access_token: str
 
@@ -93,18 +89,6 @@ class Settings:
         self.__get_settings_from_env__()
         self._args: ParsedArgs = args
         self._altered: bool = False
-
-        # Migration: Add new IGDB fields if they don't exist
-        if "igdb_client_id" not in self._settings:
-            self._settings["igdb_client_id"] = ""
-            self._altered = True
-        if "igdb_access_token" not in self._settings:
-            self._settings["igdb_access_token"] = ""
-            self._altered = True
-
-        # Save the settings if we made changes
-        if self._altered:
-            self.save(force=True)
 
     def __get_settings_from_env__(self):
         if os.environ.get("prioritize_by_ending_soonest") == "1":

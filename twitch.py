@@ -68,7 +68,6 @@ from constants import (
     State,
     ClientType,
     WebsocketTopic,
-    PRIORITY_ALGORITHM_LIST,
     PRIORITY_ALGORITHM_ADAPTIVE,
     PRIORITY_ALGORITHM_BALANCED,
     PRIORITY_ALGORITHM_ENDING_SOONEST,
