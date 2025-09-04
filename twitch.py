@@ -69,8 +69,8 @@ from constants import (
     ClientType,
     WebsocketTopic,
     PRIORITY_ALGORITHM_LIST,
-    PRIORITY_ALGORITHM_SMART,
-    PRIORITY_ALGORITHM_WEIGHTED,
+    PRIORITY_ALGORITHM_ADAPTIVE,
+    PRIORITY_ALGORITHM_BALANCED,
     PRIORITY_ALGORITHM_ENDING_SOONEST,
 )
 
@@ -773,7 +773,13 @@ class Twitch:
 
     def _calculate_weighted_priority(self, campaign, user_priority: int) -> float:
         """
-        Calculate weighted priority score: 70% user priority, 30% time urgency.
+        Calculate weighted priority score: Balanced blend of user priority and time urgency.
+
+        This algorithm sits in the middle of the spectrum between pure priority and pure time.
+        It always considers both factors, making it more time-sensitive than Smart but more
+        priority-respectful than Ending Soonest.
+
+        Algorithm: 60% user priority + 40% time urgency
 
         Args:
             campaign: The campaign to calculate priority for
@@ -786,31 +792,33 @@ class Twitch:
         time_remaining_hours = (campaign.ends_at - current_time).total_seconds() / 3600
 
         if time_remaining_hours <= 0:
-            logger.log(CALL, f"WEIGHTED: {campaign.game.name} - EXPIRED (ends_at: {campaign.ends_at})")
+            logger.log(CALL, f"BALANCED: {campaign.game.name} - EXPIRED (ends_at: {campaign.ends_at})")
             return -sys.maxsize  # Expired campaigns get lowest priority
 
-        # Normalize user priority (0-1 scale)
-        # Assuming user_priority is typically 1-10, normalize to 0-1
-        max_expected_priority = 10
-        normalized_priority = min(1.0, user_priority / max_expected_priority)
+        # Calculate time urgency score (0-100 scale)
+        # Use a reasonable time window - campaigns ending within 72 hours are considered urgent
+        max_urgency_window = 72  # hours
+        time_urgency_score = max(0, 100 * (1 - (time_remaining_hours / max_urgency_window)))
+        time_urgency_score = min(100, time_urgency_score)  # Cap at 100
 
-        # Calculate time urgency (0-1 scale, where 1 = very urgent)
-        # Use 168 hours (1 week) as max time window
-        max_time_window = 168
-        time_urgency = min(1.0, max(0.0, 1.0 - (time_remaining_hours / max_time_window)))
+        # Priority component (0-100 scale)
+        # Normalize user priority to 0-100 scale
+        max_expected_priority = max(10, user_priority)  # Ensure we don't over-normalize
+        priority_score = (user_priority / max_expected_priority) * 100
 
-        # Weighted score: 70% priority, 30% time urgency
-        weighted_score = (0.7 * normalized_priority) + (0.3 * time_urgency)
+        # Weighted blend: 60% priority + 40% time urgency
+        priority_weight = 0.60
+        time_weight = 0.40
 
-        # Scale back to reasonable range and add base priority
-        final_score = user_priority + (weighted_score * 10)
+        blended_score = (priority_weight * priority_score) + (time_weight * time_urgency_score)
 
-        logger.warning(f"WEIGHTED: {campaign.game.name} - Priority: {user_priority}, "
+        # Scale final score to maintain reasonable range relative to user priorities
+        final_score = (blended_score / 100) * user_priority + (blended_score * 0.1)
+
+        logger.log(CALL, f"BALANCED: {campaign.game.name} - Priority: {user_priority}, "
                    f"Time remaining: {time_remaining_hours:.1f}h, "
-                   f"Normalized priority: {normalized_priority:.2f}, "
-                   f"Time urgency: {time_urgency:.2f}, "
-                   f"Weighted score: {weighted_score:.2f}, "
-                   f"Final score: {final_score:.2f}")
+                   f"Priority score: {priority_score:.1f}, Time urgency: {time_urgency_score:.1f}, "
+                   f"Blend (60/40): {blended_score:.1f}, Final score: {final_score:.2f}")
 
         return final_score
 
@@ -829,7 +837,7 @@ class Twitch:
         time_remaining_hours = (campaign.ends_at - current_time).total_seconds() / 3600
 
         if time_remaining_hours <= 0:
-            logger.log(CALL, f"SMART: {campaign.game.name} - EXPIRED (ends_at: {campaign.ends_at})")
+            logger.log(CALL, f"ADAPTIVE: {campaign.game.name} - EXPIRED (ends_at: {campaign.ends_at})")
             return -sys.maxsize  # Expired campaigns get lowest priority
 
         # Calculate time pressure
@@ -849,7 +857,7 @@ class Twitch:
         # Determine risk level for logging
         risk_level = "LOW" if time_risk < 0.3 else "MEDIUM" if time_risk < 0.7 else "HIGH"
 
-        logger.warning(f"SMART: {campaign.game.name} - Priority: {user_priority}, "
+        logger.log(CALL, f"ADAPTIVE: {campaign.game.name} - Priority: {user_priority}, "
                    f"Time remaining: {time_remaining_hours:.1f}h, "
                    f"Minutes needed: {minutes_needed}, "
                    f"Hours needed: {hours_needed:.1f}h, "
@@ -947,39 +955,39 @@ class Twitch:
                         else:
                             self.wanted_games[game] = -i
                             logger.log(CALL, f"ENDING_SOONEST: {game.name} - Non-priority game, Score: {-i}")
-                elif priority_algorithm == PRIORITY_ALGORITHM_WEIGHTED:
-                    logger.warning("WEIGHTED: Using weighted priority algorithm (70% priority + 30% time urgency)")
+                elif priority_algorithm == PRIORITY_ALGORITHM_BALANCED:
+                    logger.log(CALL, "BALANCED: Using balanced priority algorithm (60% priority + 40% time urgency)")
                     # Weighted priority: blend user priority with time urgency
                     for i, campaign in enumerate(filtered_campaigns):
                         game = campaign.game
                         game_priority = priorities.get(game.name, 0)
                         if game_priority:
-                            # Calculate weighted score
-                            weighted_score = self._calculate_weighted_priority(campaign, game_priority)
-                            self.wanted_games[game] = weighted_score
+                            # Calculate balanced score
+                            balanced_score = self._calculate_weighted_priority(campaign, game_priority)
+                            self.wanted_games[game] = balanced_score
                         else:
                             # Non-priority games: use time-based sorting
                             time_remaining = (campaign.ends_at - datetime.now(timezone.utc)).total_seconds() / 3600
                             self.wanted_games[game] = -time_remaining
-                            logger.log(CALL, f"WEIGHTED: {game.name} - Non-priority game, "
+                            logger.log(CALL, f"BALANCED: {game.name} - Non-priority game, "
                                        f"Time remaining: {time_remaining:.1f}h, Score: {-time_remaining:.2f}")
-                elif priority_algorithm == PRIORITY_ALGORITHM_SMART:
-                    logger.warning("SMART: Using smart priority algorithm (priority + completion risk)")
+                elif priority_algorithm == PRIORITY_ALGORITHM_ADAPTIVE:
+                    logger.log(CALL, "ADAPTIVE: Using adaptive priority algorithm (priority + completion risk)")
                     # Smart priority: ensure higher priority games complete before lower ones
                     for i, campaign in enumerate(filtered_campaigns):
                         game = campaign.game
                         game_priority = priorities.get(game.name, 0)
                         if game_priority:
-                            smart_score = self._calculate_smart_priority(campaign, game_priority)
-                            self.wanted_games[game] = smart_score
+                            adaptive_score = self._calculate_smart_priority(campaign, game_priority)
+                            self.wanted_games[game] = adaptive_score
                         else:
                             # Non-priority games: use time-based sorting
                             time_remaining = (campaign.ends_at - datetime.now(timezone.utc)).total_seconds() / 3600
                             self.wanted_games[game] = -time_remaining
-                            logger.log(CALL, f"SMART: {game.name} - Non-priority game, "
+                            logger.log(CALL, f"ADAPTIVE: {game.name} - Non-priority game, "
                                        f"Time remaining: {time_remaining:.1f}h, Score: {-time_remaining:.2f}")
                 else:
-                    logger.warning("DEFAULT: Using default priority list algorithm (user-defined order)")
+                    logger.log(CALL, "DEFAULT: Using default priority list algorithm (user-defined order)")
                     # Default priority list: use user-defined order (original behavior)
                     for i, campaign in enumerate(filtered_campaigns):
                         game = campaign.game

@@ -114,11 +114,11 @@ MAX_TOPICS = (MAX_WEBSOCKETS * WS_TOPICS_LIMIT) - BASE_TOPICS
 MAX_CHANNELS = MAX_TOPICS // TOPICS_PER_CHANNEL
 # Misc
 DEFAULT_LANG = "English"
-# Priority Algorithm Constants
-PRIORITY_ALGORITHM_LIST = "list"
-PRIORITY_ALGORITHM_SMART = "smart"
-PRIORITY_ALGORITHM_WEIGHTED = "weighted"
-PRIORITY_ALGORITHM_ENDING_SOONEST = "ending_soonest"
+# Priority Algorithm Constants (Spectrum: Priority-focused → Time-focused)
+PRIORITY_ALGORITHM_LIST = "list"          # Pure user priority order
+PRIORITY_ALGORITHM_BALANCED = "balanced"  # 60% priority + 40% time
+PRIORITY_ALGORITHM_ADAPTIVE = "adaptive"  # Priority with safety override
+PRIORITY_ALGORITHM_ENDING_SOONEST = "ending_soonest"  # Pure time-based
 # Intervals and Delays
 PING_INTERVAL = timedelta(minutes=3)
 PING_TIMEOUT = timedelta(seconds=10)

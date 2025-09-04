@@ -36,7 +36,7 @@ from exceptions import ExitRequest
 from utils import resource_path, set_root_icon, webopen, Game, _T
 from constants import (
     SELF_PATH, OUTPUT_FORMATTER, WS_TOPICS_LIMIT, MAX_WEBSOCKETS, WINDOW_TITLE, State,
-    PRIORITY_ALGORITHM_LIST, PRIORITY_ALGORITHM_SMART, PRIORITY_ALGORITHM_WEIGHTED, PRIORITY_ALGORITHM_ENDING_SOONEST
+    PRIORITY_ALGORITHM_LIST, PRIORITY_ALGORITHM_ADAPTIVE, PRIORITY_ALGORITHM_BALANCED, PRIORITY_ALGORITHM_ENDING_SOONEST
 )
 if sys.platform == "win32":
     from registry import RegistryKey, ValueType
@@ -1595,28 +1595,28 @@ class SettingsPanel:
         ttk.Label(priority_algorithm_frame, text="Priority Algorithm: ").grid(column=0, row=0, sticky="e")
         # Map setting values to display names
         algorithm_display_map = {
-            PRIORITY_ALGORITHM_LIST: "Default",
-            PRIORITY_ALGORITHM_SMART: "Smart Priority",
+            PRIORITY_ALGORITHM_LIST: "Priority List",
+            PRIORITY_ALGORITHM_ADAPTIVE: "Adaptive Priority",
+            PRIORITY_ALGORITHM_BALANCED: "Balanced Priority",
             PRIORITY_ALGORITHM_ENDING_SOONEST: "Ending Soonest",
-            PRIORITY_ALGORITHM_WEIGHTED: "Weighted Priority",
         }
         # Ensure we always have a valid algorithm setting and display name
         current_algorithm = getattr(self._settings, 'priority_algorithm', PRIORITY_ALGORITHM_LIST)
-        current_algorithm_display = algorithm_display_map.get(current_algorithm, "Default")
+        current_algorithm_display = algorithm_display_map.get(current_algorithm, "Priority List")
 
         # If setting is invalid, reset it to default
         if current_algorithm not in algorithm_display_map:
             self._settings.priority_algorithm = PRIORITY_ALGORITHM_LIST
-            current_algorithm_display = "Default"
+            current_algorithm_display = "Priority List"
 
         self._priority_algorithm_menu = SelectMenu(
             priority_algorithm_frame,
             default=current_algorithm_display,
             options={
-                "Default": PRIORITY_ALGORITHM_LIST,
-                "Smart Priority": PRIORITY_ALGORITHM_SMART,
+                "Priority List": PRIORITY_ALGORITHM_LIST,
+                "Adaptive Priority": PRIORITY_ALGORITHM_ADAPTIVE,
+                "Balanced Priority": PRIORITY_ALGORITHM_BALANCED,
                 "Ending Soonest": PRIORITY_ALGORITHM_ENDING_SOONEST,
-                "Weighted Priority": PRIORITY_ALGORITHM_WEIGHTED,
             },
             command=self.update_priority_algorithm,
         )
@@ -1782,8 +1782,39 @@ class SettingsPanel:
 
     def set_games(self, games: abc.Iterable[Game]) -> None:
         games_list = sorted(map(str, games))
-        self._exclude_entry.config(values=games_list)
-        self._priority_entry.config(values=games_list)
+        # Filter out games that are in the other list to prevent conflicts
+        priority_games = set(self._settings.priority)
+        exclude_games = set(self._settings.exclude)
+
+        # For exclusion dropdown, exclude games that are in priority list
+        exclude_options = [game for game in games_list if game not in priority_games]
+        self._exclude_entry.config(values=exclude_options)
+
+        # For priority dropdown, exclude games that are in exclusion list
+        priority_options = [game for game in games_list if game not in exclude_games]
+        self._priority_entry.config(values=priority_options)
+
+    def _update_dropdown_options(self) -> None:
+        """Update dropdown options to exclude games that are in the other list."""
+        # Get current dropdown values
+        current_exclude_values = list(self._exclude_entry.cget("values"))
+        current_priority_values = list(self._priority_entry.cget("values"))
+
+        # Combine all available games
+        all_games = sorted(set(current_exclude_values + current_priority_values +
+                             list(self._settings.priority) + list(self._settings.exclude)))
+
+        # Filter out games that are in the other list
+        priority_games = set(self._settings.priority)
+        exclude_games = set(self._settings.exclude)
+
+        # For exclusion dropdown, exclude games that are in priority list
+        exclude_options = [game for game in all_games if game not in priority_games]
+        self._exclude_entry.config(values=exclude_options)
+
+        # For priority dropdown, exclude games that are in exclusion list
+        priority_options = [game for game in all_games if game not in exclude_games]
+        self._priority_entry.config(values=priority_options)
 
     def priorities(self) -> dict[str, int]:
         # NOTE: we shift the indexes so that 0 can be used as the default one
@@ -1807,6 +1838,8 @@ class SettingsPanel:
             self._priority_list.see("end")
             self._settings.priority.append(game_name)
             self._settings.alter()
+            # Update dropdown options to reflect the change
+            self._update_dropdown_options()
         else:
             # already there, set the selection on it
             self._priority_list.selection_set(existing_idx)
@@ -1842,6 +1875,8 @@ class SettingsPanel:
         self._priority_list.delete(idx)
         del self._settings.priority[idx]
         self._settings.alter()
+        # Update dropdown options to reflect the change
+        self._update_dropdown_options()
 
     def priority_only(self) -> None:
         self._settings.priority_only = bool(self._vars["priority_only"].get())
@@ -1871,6 +1906,8 @@ class SettingsPanel:
             else:
                 self._exclude_list.insert("end", game_name)
                 self._exclude_list.see("end")
+            # Update dropdown options to reflect the change
+            self._update_dropdown_options()
         else:
             # it was already there, select it
             for i, item in enumerate(self._exclude_list.get(0, "end")):
@@ -1893,6 +1930,8 @@ class SettingsPanel:
             self._settings.exclude.discard(item)
             self._settings.alter()
             self._exclude_list.delete(idx)
+            # Update dropdown options to reflect the change
+            self._update_dropdown_options()
 
 
 class HelpTab:
@@ -2073,7 +2112,19 @@ class GUIManager:
         self.tabs.add_tab(help_frame, name=_("gui", "tabs", "help"))
         # clamp minimum window size (update geometry first)
         root.update_idletasks()
-        root.minsize(width=root.winfo_reqwidth(), height=root.winfo_reqheight())
+        min_width = root.winfo_reqwidth()
+        min_height = root.winfo_reqheight()
+        root.minsize(width=min_width, height=min_height)
+
+        # Set dynamic height based on screen size for better Settings tab experience
+        screen_height = root.winfo_screenheight()
+        # Use 80% of screen height but ensure it's at least the minimum required height
+        dynamic_height = max(min_height, int(screen_height * 0.8))
+
+        # If no saved window position, set default size with dynamic height
+        if not self._twitch.settings.window_position:
+            root.geometry(f"{min_width}x{dynamic_height}")
+            self._twitch.settings.window_position = root.geometry()
         # register logging handler
         self._handler = _TKOutputHandler(self)
         self._handler.setFormatter(OUTPUT_FORMATTER)
