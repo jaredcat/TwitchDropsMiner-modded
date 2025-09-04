@@ -2415,8 +2415,12 @@ class SettingsPanel:
 
         # Since we can't update GUI from background thread, use a flag-based approach
         # The main GUI poll loop will pick this up
+        import logging
+        logger = logging.getLogger("TwitchDrops")
+        logger.info("Setting flag for GUI update on next poll cycle...")
         print("Setting flag for GUI update on next poll cycle...")
         self._priority_needs_refresh = True
+        logger.info(f"Flag set: _priority_needs_refresh = {self._priority_needs_refresh}")
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
@@ -2430,6 +2434,14 @@ class SettingsPanel:
 
     def _steam_sort_by_release_date(self):
         """Sort priority list by Steam release date."""
+        # Force logging to file even with pythonw.exe
+        import logging
+        logger = logging.getLogger("TwitchDrops")
+        logger.info("=== Steam sort by release date clicked ===")
+        logger.info(f"API Key present: {bool(self._settings.steam_api_key)}")
+        logger.info(f"Steam ID present: {bool(self._settings.steam_id)}")
+        logger.info(f"Priority list length: {len(self._settings.priority)}")
+
         print("=== Steam sort by release date clicked ===")
         print(f"API Key present: {bool(self._settings.steam_api_key)}")
         print(f"Steam ID present: {bool(self._settings.steam_id)}")
@@ -2873,12 +2885,19 @@ class GUIManager:
                 # Check if priority list needs refreshing from background sort
                 if hasattr(self.settings, '_priority_needs_refresh') and self.settings._priority_needs_refresh:
                     try:
+                        import logging
+                        logger = logging.getLogger("TwitchDrops")
+                        logger.info("Refreshing priority list from main GUI thread...")
                         print("Refreshing priority list from main GUI thread...")
                         self.settings._priority_list.delete(0, "end")
                         self.settings._priority_list.insert("end", *self._twitch.settings.priority)
                         self.settings._priority_needs_refresh = False
+                        logger.info(f"Priority list refreshed with {len(self._twitch.settings.priority)} games")
                         print(f"Priority list refreshed with {len(self._twitch.settings.priority)} games")
                     except Exception as e:
+                        import logging
+                        logger = logging.getLogger("TwitchDrops")
+                        logger.error(f"Error refreshing priority list: {e}")
                         print(f"Error refreshing priority list: {e}")
 
             except tk.TclError:
