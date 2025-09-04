@@ -2286,25 +2286,20 @@ class SettingsPanel:
 
     async def _steam_sort_games(self, sort_type: str):
         """Generic Steam sorting function."""
-        print(f"_steam_sort_games called with sort_type: {sort_type}")
         if sort_type == "playtime":
             # Only playtime sorting requires Steam API and ownership
             if not self._settings.steam_api_key or not self._settings.steam_id:
                 print("Steam API key or Steam ID missing - required for playtime sorting")
                 return
-            print("Calling _steam_sort_by_playtime_impl")
             await self._steam_sort_by_playtime_impl()
         elif sort_type == "release_date":
             # Simple alphabetical sort as fallback (could be enhanced with IGDB later)
-            print("Calling _simple_sort_by_release_date")
             await self._simple_sort_by_release_date()
         elif sort_type == "rating":
             # Simple reverse alphabetical sort as fallback (could be enhanced with IGDB later)
-            print("Calling _simple_sort_by_rating")
             await self._simple_sort_by_rating()
         else:
             print(f"Unknown sort_type: {sort_type}")
-        print(f"_steam_sort_games completed for {sort_type}")
 
     async def _steam_sort_by_playtime_impl(self):
         """Sort by Steam playtime - only for owned games."""
@@ -2413,35 +2408,21 @@ class SettingsPanel:
         except Exception as e:
             print(f"Manager save failed: {e}")
 
-        # Directly update GUI using the manager's root
+        # Use event_generate to safely update GUI from background thread
         import logging
         logger = logging.getLogger("TwitchDrops")
-        logger.info("Attempting direct GUI update using root.after...")
-
-        def safe_gui_update():
-            logger.info("safe_gui_update function called!")
-            try:
-                logger.info("Executing safe GUI update...")
-                self._priority_list.delete(0, "end")
-                self._priority_list.insert("end", *sorted_priority)
-                logger.info(f"GUI updated successfully with {len(sorted_priority)} games")
-            except Exception as e:
-                logger.error(f"Safe GUI update failed: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
-            logger.info("safe_gui_update function completed!")
+        logger.info("Triggering GUI update event from background thread...")
 
         try:
-            # Use the root's after method to schedule on main thread
-            logger.info("About to call root.after...")
-            self._manager._root.after(0, safe_gui_update)
-            logger.info("GUI update scheduled successfully using root.after")
+            # Store the sorted list for the event handler to access
+            self._pending_sorted_priority = sorted_priority
+            # Generate a custom event that will be handled in the main thread
+            self._manager._root.event_generate("<<priority_list_updated>>", when="tail")
+            logger.info("GUI update event generated successfully")
         except Exception as e:
-            logger.error(f"Failed to schedule GUI update: {e}")
+            logger.error(f"Failed to generate GUI update event: {e}")
             import traceback
             logger.error(traceback.format_exc())
-
-        logger.info("_update_priority_list_safely completed")
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
@@ -2455,20 +2436,7 @@ class SettingsPanel:
 
     def _steam_sort_by_release_date(self):
         """Sort priority list by Steam release date."""
-        # Force logging to file even with pythonw.exe
-        import logging
-        logger = logging.getLogger("TwitchDrops")
-        logger.info("=== Steam sort by release date clicked ===")
-        logger.info(f"API Key present: {bool(self._settings.steam_api_key)}")
-        logger.info(f"Steam ID present: {bool(self._settings.steam_id)}")
-        logger.info(f"Priority list length: {len(self._settings.priority)}")
-
         print("=== Steam sort by release date clicked ===")
-        print(f"API Key present: {bool(self._settings.steam_api_key)}")
-        print(f"Steam ID present: {bool(self._settings.steam_id)}")
-        print(f"API Key value: {self._settings.steam_api_key[:8]}...")
-        print(f"Steam ID value: {self._settings.steam_id}")
-        print(f"Priority list length: {len(self._settings.priority)}")
         self._run_steam_sort("release_date")
 
     def _steam_sort_by_rating(self):
@@ -2811,6 +2779,9 @@ class GUIManager:
             # use old-style window closing protocol for non-windows platforms
             root.protocol("WM_DELETE_WINDOW", self.close)
             root.protocol("WM_DESTROY_WINDOW", self.close)
+        # Bind custom events for thread-safe GUI updates
+        root.bind("<<priority_list_updated>>", self._handle_priority_list_update)
+
         # stay hidden in tray if needed, otherwise show the window when everything's ready
         if self._twitch.settings.tray:
             # NOTE: this starts the tray icon thread
@@ -2933,6 +2904,34 @@ class GUIManager:
         self._root.focus_set()
         self.channels.clear_selection()
         self.settings.clear_selection()
+
+    def _handle_priority_list_update(self, event):
+        """Handle priority list update event from background thread (runs in main thread)."""
+        try:
+            import logging
+            logger = logging.getLogger("TwitchDrops")
+            logger.info("Handling priority list update event in main thread...")
+
+            # Check if the settings panel has the pending sorted priority
+            if hasattr(self.settings, '_pending_sorted_priority'):
+                sorted_priority = self.settings._pending_sorted_priority
+                logger.info(f"Updating GUI with {len(sorted_priority)} games...")
+
+                # Update the priority list widget
+                self.settings._priority_list.delete(0, "end")
+                self.settings._priority_list.insert("end", *sorted_priority)
+
+                # Clean up the pending data
+                delattr(self.settings, '_pending_sorted_priority')
+                logger.info("Priority list GUI updated successfully!")
+            else:
+                logger.warning("No pending sorted priority found")
+        except Exception as e:
+            import logging
+            logger = logging.getLogger("TwitchDrops")
+            logger.error(f"Failed to handle priority list update: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
     # these are here to interface with underlaying GUI components
     def save(self, *, force: bool = False) -> None:
