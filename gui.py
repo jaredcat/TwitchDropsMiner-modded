@@ -2351,22 +2351,16 @@ class SettingsPanel:
 
     async def _simple_sort_by_release_date(self):
         """Simple sort by game name as fallback for release date (could be enhanced with IGDB)."""
-        try:
-            current_priority = list(self._settings.priority)
-            if not current_priority:
-                print("No games in priority list to sort")
-                return
+        # Do not log here; background thread logging can break Tk
+        current_priority = list(self._settings.priority)
+        if not current_priority:
+            return
 
-            print(f"Sorting {len(current_priority)} games by name (release date sorting would require IGDB API)")
+        # Simple alphabetical sort as placeholder
+        sorted_priority = sorted(current_priority, key=str.lower)
 
-            # Simple alphabetical sort as placeholder
-            sorted_priority = sorted(current_priority, key=str.lower)
-            print("Sorted alphabetically (placeholder for release date sorting)")
-
-            self._update_priority_list_safely(sorted_priority)
-
-        except Exception as e:
-            print(f"Release date sorting error: {e}")
+        # Persist and request GUI update
+        self._update_priority_list_safely(sorted_priority)
 
     async def _simple_sort_by_rating(self):
         """Simple sort by game name as fallback for rating (could be enhanced with IGDB)."""
@@ -2424,6 +2418,12 @@ class SettingsPanel:
     def _steam_sort_by_release_date(self):
         """Sort priority list by Steam release date."""
         print("=== Steam sort by release date clicked ===")
+        # Log to file so it shows up with pythonw.exe
+        try:
+            import logging
+            logging.getLogger("TwitchDrops").info("Steam sort (release_date) clicked")
+        except Exception:
+            pass
         self._run_steam_sort("release_date")
 
     def _steam_sort_by_rating(self):
