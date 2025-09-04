@@ -786,6 +786,7 @@ class Twitch:
         time_remaining_hours = (campaign.ends_at - current_time).total_seconds() / 3600
 
         if time_remaining_hours <= 0:
+            logger.info(f"WEIGHTED: {campaign.game.name} - EXPIRED (ends_at: {campaign.ends_at})")
             return -sys.maxsize  # Expired campaigns get lowest priority
 
         # Normalize user priority (0-1 scale)
@@ -802,7 +803,16 @@ class Twitch:
         weighted_score = (0.7 * normalized_priority) + (0.3 * time_urgency)
 
         # Scale back to reasonable range and add base priority
-        return user_priority + (weighted_score * 10)
+        final_score = user_priority + (weighted_score * 10)
+
+        logger.info(f"WEIGHTED: {campaign.game.name} - Priority: {user_priority}, "
+                   f"Time remaining: {time_remaining_hours:.1f}h, "
+                   f"Normalized priority: {normalized_priority:.2f}, "
+                   f"Time urgency: {time_urgency:.2f}, "
+                   f"Weighted score: {weighted_score:.2f}, "
+                   f"Final score: {final_score:.2f}")
+
+        return final_score
 
     def _calculate_smart_priority(self, campaign, user_priority: int) -> float:
         """
@@ -819,6 +829,7 @@ class Twitch:
         time_remaining_hours = (campaign.ends_at - current_time).total_seconds() / 3600
 
         if time_remaining_hours <= 0:
+            logger.info(f"SMART: {campaign.game.name} - EXPIRED (ends_at: {campaign.ends_at})")
             return -sys.maxsize  # Expired campaigns get lowest priority
 
         # Calculate time pressure
@@ -827,13 +838,26 @@ class Twitch:
 
         # Calculate completion risk (0-1, where 1 = very risky)
         # Risk factor: how tight is the time window?
-        time_risk = max(0, 1 - (time_remaining_hours / (hours_needed * 1.2)))  # 20% buffer
+        buffer_factor = 1.2  # 20% buffer
+        time_risk = max(0, 1 - (time_remaining_hours / (hours_needed * buffer_factor))) if hours_needed > 0 else 0
 
         # Calculate priority boost for high-priority games at risk
         # Higher priority games get bigger boost when at risk
         priority_boost = user_priority * time_risk * 10  # Scale factor
+        final_score = user_priority + priority_boost
 
-        return user_priority + priority_boost
+        # Determine risk level for logging
+        risk_level = "LOW" if time_risk < 0.3 else "MEDIUM" if time_risk < 0.7 else "HIGH"
+
+        logger.info(f"SMART: {campaign.game.name} - Priority: {user_priority}, "
+                   f"Time remaining: {time_remaining_hours:.1f}h, "
+                   f"Minutes needed: {minutes_needed}, "
+                   f"Hours needed: {hours_needed:.1f}h, "
+                   f"Time risk: {time_risk:.2f} ({risk_level}), "
+                   f"Priority boost: {priority_boost:.2f}, "
+                   f"Final score: {final_score:.2f}")
+
+        return final_score
 
     async def run(self):
         while True:
@@ -902,18 +926,29 @@ class Twitch:
                 campaigns = self.inventory
                 filtered_campaigns = list(filter(self.filter_campaigns, campaigns))
 
+                logger.info(f"PRIORITY_ALGORITHM: Using '{priority_algorithm}' algorithm")
+                logger.info(f"PRIORITY_ALGORITHM: Found {len(filtered_campaigns)} eligible campaigns")
+                logger.info(f"PRIORITY_ALGORITHM: User priority list: {list(priorities.keys())}")
+
                 # Sort campaigns based on selected algorithm
                 if priority_algorithm == PRIORITY_ALGORITHM_ENDING_SOONEST:
+                    logger.info("ENDING_SOONEST: Sorting by campaign end time")
                     # Sort by end_at time (ending soonest first)
                     filtered_campaigns.sort(key=lambda c: c.ends_at)
                     for i, campaign in enumerate(filtered_campaigns):
                         game = campaign.game
                         game_priority = priorities.get(game.name, 0)
                         if game_priority:
-                            self.wanted_games[game] = len(filtered_campaigns) - i
+                            score = len(filtered_campaigns) - i
+                            self.wanted_games[game] = score
+                            logger.info(f"ENDING_SOONEST: {game.name} - Priority: {game_priority}, "
+                                       f"Ends: {campaign.ends_at.strftime('%Y-%m-%d %H:%M')}, "
+                                       f"Position: {i+1}/{len(filtered_campaigns)}, Score: {score}")
                         else:
                             self.wanted_games[game] = -i
+                            logger.info(f"ENDING_SOONEST: {game.name} - Non-priority game, Score: {-i}")
                 elif priority_algorithm == PRIORITY_ALGORITHM_WEIGHTED:
+                    logger.info("WEIGHTED: Using weighted priority algorithm (70% priority + 30% time urgency)")
                     # Weighted priority: blend user priority with time urgency
                     for i, campaign in enumerate(filtered_campaigns):
                         game = campaign.game
@@ -926,7 +961,10 @@ class Twitch:
                             # Non-priority games: use time-based sorting
                             time_remaining = (campaign.ends_at - datetime.now(timezone.utc)).total_seconds() / 3600
                             self.wanted_games[game] = -time_remaining
+                            logger.info(f"WEIGHTED: {game.name} - Non-priority game, "
+                                       f"Time remaining: {time_remaining:.1f}h, Score: {-time_remaining:.2f}")
                 elif priority_algorithm == PRIORITY_ALGORITHM_SMART:
+                    logger.info("SMART: Using smart priority algorithm (priority + completion risk)")
                     # Smart priority: ensure higher priority games complete before lower ones
                     for i, campaign in enumerate(filtered_campaigns):
                         game = campaign.game
@@ -938,15 +976,26 @@ class Twitch:
                             # Non-priority games: use time-based sorting
                             time_remaining = (campaign.ends_at - datetime.now(timezone.utc)).total_seconds() / 3600
                             self.wanted_games[game] = -time_remaining
+                            logger.info(f"SMART: {game.name} - Non-priority game, "
+                                       f"Time remaining: {time_remaining:.1f}h, Score: {-time_remaining:.2f}")
                 else:
+                    logger.info("DEFAULT: Using default priority list algorithm (user-defined order)")
                     # Default priority list: use user-defined order (original behavior)
                     for i, campaign in enumerate(filtered_campaigns):
                         game = campaign.game
                         game_priority = priorities.get(game.name, 0)
                         if game_priority:
                             self.wanted_games[game] = game_priority
+                            logger.info(f"DEFAULT: {game.name} - Priority: {game_priority}, Score: {game_priority}")
                         else:
                             self.wanted_games[game] = -i
+                            logger.info(f"DEFAULT: {game.name} - Non-priority game, Score: {-i}")
+
+                # Log final results
+                sorted_games = sorted(self.wanted_games.items(), key=lambda x: x[1], reverse=True)
+                logger.info("PRIORITY_ALGORITHM: Final game priority order:")
+                for rank, (game, score) in enumerate(sorted_games, 1):
+                    logger.info(f"  {rank}. {game.name} (Score: {score:.2f})")
                 full_cleanup = True
                 self.restart_watching()
                 self.change_state(State.CHANNELS_CLEANUP)
