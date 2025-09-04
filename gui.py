@@ -76,11 +76,12 @@ class PlaceholderEntry(ttk.Entry):
         placeholder: str,
         prefill: str = '',
         placeholdercolor: str = "grey60",
+        is_password: bool = False,
         **kwargs: Any,
     ):
         super().__init__(master, *args, **kwargs)
         self._prefill: str = prefill
-        self._show: str = kwargs.get("show", '')
+        self._show: str = '•' if is_password else kwargs.get("show", '')
         self._text_color: str = kwargs.get("foreground", '')
         self._ph_color: str = placeholdercolor
         self._ph_text: str = placeholder
@@ -489,7 +490,7 @@ class LoginForm:
         self._login_entry = PlaceholderEntry(frame, placeholder=_("gui", "login", "username"))
         # self._login_entry.grid(column=0, row=1, columnspan=2)
         self._pass_entry = PlaceholderEntry(
-            frame, placeholder=_("gui", "login", "password"), show='•'
+            frame, placeholder=_("gui", "login", "password"), is_password=True
         )
         # self._pass_entry.grid(column=0, row=2, columnspan=2)
         self._token_entry = PlaceholderEntry(frame, placeholder=_("gui", "login", "twofa_code"))
@@ -1659,6 +1660,7 @@ class SettingsPanel:
             width=37,
             textvariable=self._vars["steam_api_key"],
             placeholder=_("gui", "settings", "general", "steam_api", "api_key_placeholder"),
+            is_password=True
         )
         self._steam_api_key.config(
             validate="focusout",
@@ -1688,9 +1690,6 @@ class SettingsPanel:
             foreground="gray"
         )
         help_text.grid(column=0, row=2, pady=(2, 0))
-
-        # Initialize button states based on current settings
-        self._update_steam_button_states()
         # Priority section - with width constraint
         priority_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "priority")
@@ -1732,6 +1731,9 @@ class SettingsPanel:
             state="disabled"
         )
         self._steam_sort_rating.grid(column=2, row=0, padx=1)
+
+        # Initialize button states after all buttons are created
+        self._update_steam_button_states()
 
         self._priority_list = PaddedListbox(
             priority_frame,
@@ -2220,45 +2222,60 @@ class SettingsPanel:
 
     def _steam_api_key_validate(self, entry: PlaceholderEntry) -> bool:
         """Validate Steam API key and update button states."""
-        api_key = entry.get().strip()
-        self._settings.steam_api_key = api_key
-        self._settings.alter()
+        try:
+            api_key = entry.get().strip()
+            self._settings.steam_api_key = api_key
+            self._settings.alter()
 
-        # Update button states based on both API key and Steam ID
-        self._update_steam_button_states()
+            # Update button states based on both API key and Steam ID
+            self._update_steam_button_states()
 
-        return True
+            return True
+        except Exception as e:
+            print(f"Steam API key validation error: {e}")
+            return False
 
     def _steam_id_validate(self, entry: PlaceholderEntry) -> bool:
         """Validate Steam ID and update button states."""
-        steam_id = entry.get().strip()
+        try:
+            steam_id = entry.get().strip()
 
-        # Basic Steam ID validation (should be numeric and 17 digits)
-        is_valid = steam_id.isdigit() and len(steam_id) == 17
+            # Basic Steam ID validation (should be numeric and 17 digits)
+            is_valid = steam_id.isdigit() and len(steam_id) == 17
 
-        if is_valid or not steam_id:  # Allow empty (will disable buttons)
-            self._settings.steam_id = steam_id
-            self._settings.alter()
+            if is_valid or not steam_id:  # Allow empty (will disable buttons)
+                self._settings.steam_id = steam_id
+                self._settings.alter()
 
-        # Update button states based on both API key and Steam ID
-        self._update_steam_button_states()
+            # Update button states based on both API key and Steam ID
+            self._update_steam_button_states()
 
-        return True
+            return True
+        except Exception as e:
+            print(f"Steam ID validation error: {e}")
+            return False
 
     def _update_steam_button_states(self):
         """Update Steam sorting button states based on API key and Steam ID availability."""
-        has_api_key = bool(self._settings.steam_api_key.strip())
-        has_steam_id = bool(self._settings.steam_id.strip())
+        try:
+            has_api_key = bool(self._settings.steam_api_key.strip())
+            has_steam_id = bool(self._settings.steam_id.strip())
 
-        # Both API key and Steam ID are required
-        state = "normal" if (has_api_key and has_steam_id) else "disabled"
+            # Both API key and Steam ID are required
+            state = "normal" if (has_api_key and has_steam_id) else "disabled"
 
-        # Debug output
-        print(f"Steam button state update: API key={has_api_key}, Steam ID={has_steam_id}, State={state}")
+            # Debug output
+            print(f"Steam button state update: API key={has_api_key}, Steam ID={has_steam_id}, State={state}")
 
-        self._steam_sort_playtime.config(state=state)
-        self._steam_sort_release.config(state=state)
-        self._steam_sort_rating.config(state=state)
+            # Only update if buttons exist (safety check)
+            if hasattr(self, '_steam_sort_playtime'):
+                self._steam_sort_playtime.config(state=state)
+            if hasattr(self, '_steam_sort_release'):
+                self._steam_sort_release.config(state=state)
+            if hasattr(self, '_steam_sort_rating'):
+                self._steam_sort_rating.config(state=state)
+        except Exception as e:
+            print(f"Steam button state update error: {e}")
 
     async def _steam_sort_games(self, sort_type: str):
         """Generic Steam sorting function."""
