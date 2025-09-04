@@ -1658,10 +1658,11 @@ class SettingsPanel:
         self._igdb_client_id = PlaceholderEntry(
             igdb_api_frame,
             width=37,
-            textvariable=self._vars["igdb_client_id"],
             placeholder=_("gui", "settings", "general", "igdb_api", "client_id_placeholder"),
             is_password=True
         )
+        # Set the textvariable after creation to avoid showing the value
+        self._igdb_client_id.config(textvariable=self._vars["igdb_client_id"])
         self._igdb_client_id.config(
             validate="focusout",
             validatecommand=partial(self._igdb_client_id_validate, self._igdb_client_id)
@@ -1674,10 +1675,11 @@ class SettingsPanel:
         self._igdb_client_secret = PlaceholderEntry(
             igdb_token_frame,
             width=37,
-            textvariable=self._vars["igdb_client_secret"],
             placeholder=_("gui", "settings", "general", "igdb_api", "client_secret_placeholder"),
             is_password=True
         )
+        # Set the textvariable after creation to avoid showing the value
+        self._igdb_client_secret.config(textvariable=self._vars["igdb_client_secret"])
         self._igdb_client_secret.config(
             validate="focusout",
             validatecommand=partial(self._igdb_client_secret_validate, self._igdb_client_secret)
@@ -2237,165 +2239,8 @@ class SettingsPanel:
         except Exception as e:
             print(f"IGDB button state update error: {e}")
 
-    async def _igdb_sort_games(self, sort_type: str):
-        """Generic IGDB sorting function."""
-        if sort_type == "release_date":
-            await self._igdb_sort_by_release_date()
-        elif sort_type == "rating":
-            await self._igdb_sort_by_rating()
-        else:
-            print(f"Unknown sort_type: {sort_type}")
 
 
-    async def _igdb_sort_by_release_date(self):
-        """Sort by release date using IGDB API."""
-        print("Starting IGDB release date sort...")
-        current_priority = list(self._settings.priority)
-        if not current_priority:
-            print("No games in priority list")
-            return
-
-        print(f"Sorting {len(current_priority)} games by release date using IGDB")
-
-        # Check if we have IGDB credentials
-        if not self._settings.igdb_client_id or not self._settings.igdb_client_secret:
-            print("IGDB credentials missing - keeping original priority order")
-            return
-
-        try:
-            from igdb_api import IGDBAPIClient, IGDBAPIError
-
-            # Get game IDs from Twitch data
-            game_ids = []
-            for game_name in current_priority:
-                # Find the game in the Twitch games list to get its ID
-                for game in self._manager._twitch.wanted_games.keys():
-                    if game.name == game_name:
-                        game_ids.append(game.id)
-                        break
-
-            if not game_ids:
-                print("No IGDB game IDs found - keeping original priority order")
-                return
-
-            print(f"Found {len(game_ids)} IGDB game IDs")
-
-            # Use IGDB API to get game data
-            async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_client_secret) as igdb_client:
-                games_data = await igdb_client.get_games_data(game_ids)
-                print(f"Retrieved {len(games_data)} games from IGDB")
-
-                if not games_data:
-                    print("No IGDB data available - keeping original priority order")
-                    return
-
-                # Create a mapping of game names to IGDB data
-                igdb_data = {}
-                for game in games_data:
-                    # Find the corresponding game name
-                    for twitch_game in self._manager._twitch.wanted_games.keys():
-                        if twitch_game.id == game.igdb_id:
-                            igdb_data[twitch_game.name] = {
-                                "release_date": game.release_date,
-                                "rating": game.rating
-                            }
-                            break
-
-                # Sort by release date
-                def get_release_date(game_name):
-                    game_data = igdb_data.get(game_name, {})
-                    release_date = game_data.get("release_date")
-                    if not release_date:
-                        return "9999-12-31"  # Put games without dates at the end
-                    return release_date
-
-                sorted_priority = sorted(current_priority, key=get_release_date)
-                print(f"Sorted {len(sorted_priority)} games by release date")
-
-                # Update the priority list
-                self._update_priority_list_safely(sorted_priority)
-
-        except ImportError as e:
-            print(f"IGDB API module not available: {e}")
-        except Exception as e:
-            print(f"IGDB API error: {e}")
-            import traceback
-            traceback.print_exc()
-
-    async def _igdb_sort_by_rating(self):
-        """Sort by rating using IGDB API data."""
-        print("Starting IGDB rating sort...")
-        current_priority = list(self._settings.priority)
-        if not current_priority:
-            print("No games in priority list")
-            return
-
-        print(f"Sorting {len(current_priority)} games by rating using IGDB")
-
-        # Check if we have IGDB credentials
-        if not self._settings.igdb_client_id or not self._settings.igdb_client_secret:
-            print("IGDB credentials missing - keeping original priority order")
-            return
-
-        try:
-            from igdb_api import IGDBAPIClient, IGDBAPIError
-
-            # Get game IDs from Twitch data
-            game_ids = []
-            for game_name in current_priority:
-                # Find the game in the Twitch games list to get its ID
-                for game in self._manager._twitch.wanted_games.keys():
-                    if game.name == game_name:
-                        game_ids.append(game.id)
-                        break
-
-            if not game_ids:
-                print("No IGDB game IDs found - keeping original priority order")
-                return
-
-            print(f"Found {len(game_ids)} IGDB game IDs")
-
-            # Use IGDB API to get game data
-            async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_client_secret) as igdb_client:
-                games_data = await igdb_client.get_games_data(game_ids)
-                print(f"Retrieved {len(games_data)} games from IGDB")
-
-                if not games_data:
-                    print("No IGDB data available - keeping original priority order")
-                    return
-
-                # Create a mapping of game names to IGDB data
-                igdb_data = {}
-                for game in games_data:
-                    # Find the corresponding game name
-                    for twitch_game in self._manager._twitch.wanted_games.keys():
-                        if twitch_game.id == game.igdb_id:
-                            igdb_data[twitch_game.name] = {
-                                "release_date": game.release_date,
-                                "rating": game.rating
-                            }
-                            break
-
-                # Sort by rating (highest first)
-                def get_rating(game_name):
-                    game_data = igdb_data.get(game_name, {})
-                    rating = game_data.get("rating")
-                    if rating is None:
-                        return 0.0  # Games without ratings go to end
-                    return rating
-
-                sorted_priority = sorted(current_priority, key=get_rating, reverse=True)
-                print(f"Sorted {len(sorted_priority)} games by rating")
-
-                # Update the priority list
-                self._update_priority_list_safely(sorted_priority)
-
-        except ImportError as e:
-            print(f"IGDB API module not available: {e}")
-        except Exception as e:
-            print(f"IGDB API error: {e}")
-            import traceback
-            traceback.print_exc()
 
     def _update_priority_list_safely(self, sorted_priority: list[str]):
         """Safely update the priority list and GUI from any thread."""
@@ -2431,7 +2276,22 @@ class SettingsPanel:
             logging.getLogger("TwitchDrops").info("IGDB sort (release_date) clicked")
         except Exception:
             pass
-        self._run_igdb_sort("release_date")
+
+        # Simple implementation like Steam - no threading needed
+        current_priority = list(self._settings.priority)
+        if not current_priority:
+            print("No games in priority list")
+            return
+
+        print(f"Sorting {len(current_priority)} games by release date using IGDB")
+
+        # Check if we have IGDB credentials
+        if not self._settings.igdb_client_id or not self._settings.igdb_client_secret:
+            print("IGDB credentials missing - keeping original priority order")
+            return
+
+        # For now, just keep original order until we implement the actual IGDB call
+        print("IGDB sorting not yet implemented - keeping original order")
 
     def _igdb_sort_by_rating(self):
         """Sort priority list by IGDB rating."""
@@ -2440,86 +2300,23 @@ class SettingsPanel:
         print(f"Client Secret present: {bool(self._settings.igdb_client_secret)}")
         print(f"Client ID value: {self._settings.igdb_client_id[:8]}...")
         print(f"Priority list length: {len(self._settings.priority)}")
-        self._run_igdb_sort("rating")
 
-    def _run_igdb_sort(self, sort_type: str):
-        """Run IGDB sorting in a separate thread to avoid blocking the GUI."""
-        import asyncio
-        import threading
+        # Simple implementation like Steam - no threading needed
+        current_priority = list(self._settings.priority)
+        if not current_priority:
+            print("No games in priority list")
+            return
 
-        print(f"Starting IGDB sort for {sort_type}")
+        print(f"Sorting {len(current_priority)} games by rating using IGDB")
 
-        # Disable buttons to prevent multiple simultaneous sorts
-        self._igdb_sort_release.config(state="disabled")
-        self._igdb_sort_rating.config(state="disabled")
+        # Check if we have IGDB credentials
+        if not self._settings.igdb_client_id or not self._settings.igdb_client_secret:
+            print("IGDB credentials missing - keeping original priority order")
+            return
 
-        # Update button text to show progress
-        sort_type_map = {
-            "release_date": "📅",
-            "rating": "⭐"
-        }
-        button_map = {
-            "release_date": self._igdb_sort_release,
-            "rating": self._igdb_sort_rating
-        }
+        # For now, just keep original order until we implement the actual IGDB call
+        print("IGDB sorting not yet implemented - keeping original order")
 
-        original_text = button_map[sort_type].cget("text")
-        button_map[sort_type].config(text="⏳")
-
-        def run_igdb_sort_thread():
-            """Run IGDB sorting in a separate thread with proper event loop handling."""
-            print(f"Starting IGDB sort thread for {sort_type}")
-            try:
-                # Create a new event loop for this thread
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                print("Created new event loop for IGDB sort")
-
-                # Run the async function with timeout
-                print("Running igdb_sort_games...")
-                try:
-                    # Add a timeout to prevent hanging
-                    loop.run_until_complete(asyncio.wait_for(self._igdb_sort_games(sort_type), timeout=60))
-                    print("IGDB sort completed successfully")
-                except asyncio.TimeoutError:
-                    print("IGDB sort timed out after 60 seconds")
-                except Exception as e:
-                    print(f"IGDB sort failed: {e}")
-                    raise
-
-            except Exception as e:
-                print(f"IGDB sort error: {e}")
-                import traceback
-                traceback.print_exc()
-            finally:
-                print("Closing IGDB sort event loop")
-                try:
-                    # Cancel any remaining tasks
-                    pending = asyncio.all_tasks(loop)
-                    for task in pending:
-                        task.cancel()
-
-                    # Wait for tasks to complete cancellation
-                    if pending:
-                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-
-                    # Close the loop
-                    loop.close()
-                    print("IGDB sort event loop closed")
-                except Exception as cleanup_error:
-                    print(f"Error during cleanup: {cleanup_error}")
-
-                                # Re-enable buttons and restore text (thread-safe)
-                try:
-                    # Set a flag for the main thread to restore buttons
-                    self._manager._pending_button_restore = True
-                except Exception as restore_error:
-                    print(f"Error setting button restore flag: {restore_error}")
-
-        # Run in a separate thread to avoid blocking the GUI
-        thread = threading.Thread(target=run_igdb_sort_thread, daemon=True)
-        thread.start()
-        print("IGDB sort thread started")
 
     def _igdb_client_id_validate(self, entry: PlaceholderEntry) -> bool:
         """Validate IGDB Client ID input."""
