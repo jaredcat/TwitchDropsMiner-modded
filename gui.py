@@ -2350,36 +2350,100 @@ class SettingsPanel:
             traceback.print_exc()
 
     async def _simple_sort_by_release_date(self):
-        """Simple sort by game name as fallback for release date (could be enhanced with IGDB)."""
+        """Sort by release date using cached Steam data."""
         # Do not log here; background thread logging can break Tk
         current_priority = list(self._settings.priority)
         if not current_priority:
             return
 
-        # Simple alphabetical sort as placeholder
-        sorted_priority = sorted(current_priority, key=str.lower)
+        # Load Steam data from cache
+        steam_data = {}
+        try:
+            from utils import json_load
+            steam_data = json_load("steam_data.json", {})
+        except Exception:
+            # If no Steam data, fall back to alphabetical
+            sorted_priority = sorted(current_priority, key=str.lower)
+            self._update_priority_list_safely(sorted_priority)
+            return
+
+        # Create a mapping of game names to release dates
+        game_release_dates = {}
+        for cache_key, cache_entry in steam_data.items():
+            if isinstance(cache_entry, dict) and "data" in cache_entry:
+                data = cache_entry["data"]
+                if isinstance(data, list):
+                    for game_data in data:
+                        if isinstance(game_data, dict) and "name" in game_data and "release_date" in game_data:
+                            game_name = game_data["name"]
+                            release_date = game_data.get("release_date")
+                            if release_date:
+                                game_release_dates[game_name.lower()] = release_date
+
+        # Sort by release date, with games without dates at the end
+        def get_sort_key(game_name):
+            release_date = game_release_dates.get(game_name.lower())
+            if not release_date:
+                return (1, game_name.lower())  # No date = end of list
+
+            try:
+                # Parse Steam date format: "DD MMM, YYYY" or "MMM DD, YYYY"
+                from datetime import datetime
+                try:
+                    date_obj = datetime.strptime(release_date, "%d %b, %Y")
+                except ValueError:
+                    date_obj = datetime.strptime(release_date, "%b %d, %Y")
+                return (0, date_obj)  # Has date = sort by date
+            except ValueError:
+                return (1, game_name.lower())  # Invalid date = end of list
+
+        sorted_priority = sorted(current_priority, key=get_sort_key)
 
         # Persist and request GUI update
         self._update_priority_list_safely(sorted_priority)
 
     async def _simple_sort_by_rating(self):
-        """Simple sort by game name as fallback for rating (could be enhanced with IGDB)."""
+        """Sort by rating using cached Steam data."""
+        # Do not log here; background thread logging can break Tk
+        current_priority = list(self._settings.priority)
+        if not current_priority:
+            return
+
+        # Load Steam data from cache
+        steam_data = {}
         try:
-            current_priority = list(self._settings.priority)
-            if not current_priority:
-                print("No games in priority list to sort")
-                return
-
-            print(f"Sorting {len(current_priority)} games by reverse name (rating sorting would require IGDB API)")
-
-            # Simple reverse alphabetical sort as placeholder
-            sorted_priority = sorted(current_priority, key=str.lower, reverse=True)
-            print("Sorted reverse alphabetically (placeholder for rating sorting)")
-
+            from utils import json_load
+            steam_data = json_load("steam_data.json", {})
+        except Exception:
+            # If no Steam data, fall back to alphabetical
+            sorted_priority = sorted(current_priority, key=str.lower)
             self._update_priority_list_safely(sorted_priority)
+            return
 
-        except Exception as e:
-            print(f"Rating sorting error: {e}")
+        # Create a mapping of game names to ratings
+        game_ratings = {}
+        for cache_key, cache_entry in steam_data.items():
+            if isinstance(cache_entry, dict) and "data" in cache_entry:
+                data = cache_entry["data"]
+                if isinstance(data, list):
+                    for game_data in data:
+                        if isinstance(game_data, dict) and "name" in game_data and "rating" in game_data:
+                            game_name = game_data["name"]
+                            rating = game_data.get("rating")
+                            if rating is not None:
+                                game_ratings[game_name.lower()] = float(rating)
+
+        # Sort by rating (highest first), with games without ratings at the end
+        def get_sort_key(game_name):
+            rating = game_ratings.get(game_name.lower())
+            if rating is None:
+                return (1, game_name.lower())  # No rating = end of list
+            return (0, -rating)  # Has rating = sort by rating (negative for descending)
+
+        sorted_priority = sorted(current_priority, key=get_sort_key)
+
+        # Persist and request GUI update
+        self._update_priority_list_safely(sorted_priority)
 
     def _update_priority_list_safely(self, sorted_priority: list[str]):
         """Safely update the priority list and GUI from any thread."""
