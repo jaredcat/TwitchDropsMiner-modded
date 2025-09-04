@@ -2419,6 +2419,7 @@ class SettingsPanel:
         logger.info("Attempting direct GUI update using root.after...")
 
         def safe_gui_update():
+            logger.info("safe_gui_update function called!")
             try:
                 logger.info("Executing safe GUI update...")
                 self._priority_list.delete(0, "end")
@@ -2428,15 +2429,19 @@ class SettingsPanel:
                 logger.error(f"Safe GUI update failed: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
+            logger.info("safe_gui_update function completed!")
 
         try:
             # Use the root's after method to schedule on main thread
+            logger.info("About to call root.after...")
             self._manager._root.after(0, safe_gui_update)
             logger.info("GUI update scheduled successfully using root.after")
         except Exception as e:
             logger.error(f"Failed to schedule GUI update: {e}")
             import traceback
             logger.error(traceback.format_exc())
+
+        logger.info("_update_priority_list_safely completed")
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
