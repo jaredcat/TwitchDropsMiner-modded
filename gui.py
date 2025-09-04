@@ -1499,6 +1499,8 @@ def proxy_validate(entry: PlaceholderEntry, settings: Settings) -> bool:
 class _SettingsVars(TypedDict):
     tray: IntVar
     proxy: StringVar
+    steam_api_key: StringVar
+    steam_id: StringVar
     dark_theme: IntVar
     autostart: IntVar
     priority_only: IntVar
@@ -1519,6 +1521,8 @@ class SettingsPanel:
         self._settings: Settings = manager._twitch.settings
         self._vars: _SettingsVars = {
             "proxy": StringVar(master, str(self._settings.proxy)),
+            "steam_api_key": StringVar(master, self._settings.steam_api_key),
+            "steam_id": StringVar(master, self._settings.steam_id),
             "tray": IntVar(master, self._settings.autostart_tray),
             "dark_theme": IntVar(master, self._settings.dark_theme),
             "autostart": IntVar(master, self._settings.autostart),
@@ -1551,7 +1555,7 @@ class SettingsPanel:
         # language frame
         language_frame = ttk.Frame(center_frame2)
         language_frame.grid(column=0, row=0)
-        ttk.Label(language_frame, text="Language 🌐 (requires restart): ").grid(column=0, row=0)
+        ttk.Label(language_frame, text=_("gui", "settings", "general", "language")).grid(column=0, row=0)
         self._select_menu = SelectMenu(
             language_frame,
             default=_.current,
@@ -1597,31 +1601,31 @@ class SettingsPanel:
         # Priority algorithm selection frame
         priority_algorithm_frame = ttk.Frame(center_frame2)
         priority_algorithm_frame.grid(column=0, row=2)
-        ttk.Label(priority_algorithm_frame, text="Priority Algorithm: ").grid(column=0, row=0, sticky="e")
+        ttk.Label(priority_algorithm_frame, text=_("gui", "settings", "general", "priority_algorithm")).grid(column=0, row=0, sticky="e")
         # Map setting values to display names
         algorithm_display_map = {
-            PRIORITY_ALGORITHM_LIST: "Priority List",
-            PRIORITY_ALGORITHM_ADAPTIVE: "Adaptive Priority",
-            PRIORITY_ALGORITHM_BALANCED: "Balanced Priority",
-            PRIORITY_ALGORITHM_ENDING_SOONEST: "Ending Soonest",
+            PRIORITY_ALGORITHM_LIST: _("gui", "settings", "general", "priority_algorithms", "priority_list"),
+            PRIORITY_ALGORITHM_ADAPTIVE: _("gui", "settings", "general", "priority_algorithms", "adaptive_priority"),
+            PRIORITY_ALGORITHM_BALANCED: _("gui", "settings", "general", "priority_algorithms", "balanced_priority"),
+            PRIORITY_ALGORITHM_ENDING_SOONEST: _("gui", "settings", "general", "priority_algorithms", "ending_soonest"),
         }
         # Ensure we always have a valid algorithm setting and display name
         current_algorithm = getattr(self._settings, 'priority_algorithm', PRIORITY_ALGORITHM_LIST)
-        current_algorithm_display = algorithm_display_map.get(current_algorithm, "Priority List")
+        current_algorithm_display = algorithm_display_map.get(current_algorithm, _("gui", "settings", "general", "priority_algorithms", "priority_list"))
 
         # If setting is invalid, reset it to default
         if current_algorithm not in algorithm_display_map:
             self._settings.priority_algorithm = PRIORITY_ALGORITHM_LIST
-            current_algorithm_display = "Priority List"
+            current_algorithm_display = _("gui", "settings", "general", "priority_algorithms", "priority_list")
 
         self._priority_algorithm_menu = SelectMenu(
             priority_algorithm_frame,
             default=current_algorithm_display,
             options={
-                "Priority List": PRIORITY_ALGORITHM_LIST,
-                "Adaptive Priority": PRIORITY_ALGORITHM_ADAPTIVE,
-                "Balanced Priority": PRIORITY_ALGORITHM_BALANCED,
-                "Ending Soonest": PRIORITY_ALGORITHM_ENDING_SOONEST,
+                _("gui", "settings", "general", "priority_algorithms", "priority_list"): PRIORITY_ALGORITHM_LIST,
+                _("gui", "settings", "general", "priority_algorithms", "adaptive_priority"): PRIORITY_ALGORITHM_ADAPTIVE,
+                _("gui", "settings", "general", "priority_algorithms", "balanced_priority"): PRIORITY_ALGORITHM_BALANCED,
+                _("gui", "settings", "general", "priority_algorithms", "ending_soonest"): PRIORITY_ALGORITHM_ENDING_SOONEST,
             },
             command=self.update_priority_algorithm,
         )
@@ -1646,6 +1650,38 @@ class SettingsPanel:
         )
         self._proxy.config(validatecommand=partial(proxy_validate, self._proxy, self._settings))
         self._proxy.grid(column=0, row=1)
+        # Steam API key frame
+        steam_api_frame = ttk.Frame(center_frame2)
+        steam_api_frame.grid(column=0, row=4)
+        ttk.Label(steam_api_frame, text=_("gui", "settings", "general", "steam_api", "api_key")).grid(column=0, row=0)
+        self._steam_api_key = PlaceholderEntry(
+            steam_api_frame,
+            width=37,
+            textvariable=self._vars["steam_api_key"],
+            placeholder=_("gui", "settings", "general", "steam_api", "api_key_placeholder"),
+        )
+        self._steam_api_key.config(validatecommand=partial(self._steam_api_key_validate, self._steam_api_key))
+        self._steam_api_key.grid(column=0, row=1)
+        # Steam ID frame
+        steam_id_frame = ttk.Frame(center_frame2)
+        steam_id_frame.grid(column=0, row=5)
+        ttk.Label(steam_id_frame, text=_("gui", "settings", "general", "steam_api", "id")).grid(column=0, row=0)
+        self._steam_id = PlaceholderEntry(
+            steam_id_frame,
+            width=37,
+            textvariable=self._vars["steam_id"],
+            placeholder=_("gui", "settings", "general", "steam_api", "id_placeholder"),
+        )
+        self._steam_id.config(validatecommand=partial(self._steam_id_validate, self._steam_id))
+        self._steam_id.grid(column=0, row=1)
+        # Add help text for Steam ID
+        help_text = ttk.Label(
+            steam_id_frame,
+            text=_("gui", "settings", "general", "steam_api", "id_help"),
+            font=("TkDefaultFont", 8),
+            foreground="gray"
+        )
+        help_text.grid(column=0, row=2, pady=(2, 0))
         # Priority section - with width constraint
         priority_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "priority")
@@ -1659,6 +1695,38 @@ class SettingsPanel:
         ttk.Button(
             priority_frame, text="+", command=self.priority_add, width=2, style="Large.TButton"
         ).grid(column=1, row=0)
+
+        # Steam sorting buttons frame
+        steam_sorting_frame = ttk.Frame(priority_frame)
+        steam_sorting_frame.grid(column=0, row=1, columnspan=2, sticky="ew", pady=(5, 0))
+        steam_sorting_frame.columnconfigure(0, weight=1)
+        steam_sorting_frame.columnconfigure(1, weight=1)
+        steam_sorting_frame.columnconfigure(2, weight=1)
+
+        self._steam_sort_playtime = ttk.Button(
+            steam_sorting_frame,
+            text=_("gui", "settings", "sorting", "playtime"),
+            command=self._steam_sort_by_playtime,
+            state="disabled"
+        )
+        self._steam_sort_playtime.grid(column=0, row=0, padx=2, sticky="ew")
+
+        self._steam_sort_release = ttk.Button(
+            steam_sorting_frame,
+            text=_("gui", "settings", "sorting", "release_date"),
+            command=self._steam_sort_by_release_date,
+            state="disabled"
+        )
+        self._steam_sort_release.grid(column=1, row=0, padx=2, sticky="ew")
+
+        self._steam_sort_rating = ttk.Button(
+            steam_sorting_frame,
+            text=_("gui", "settings", "sorting", "rating"),
+            command=self._steam_sort_by_rating,
+            state="disabled"
+        )
+        self._steam_sort_rating.grid(column=2, row=0, padx=2, sticky="ew")
+
         self._priority_list = PaddedListbox(
             priority_frame,
             height=10,
@@ -1668,7 +1736,7 @@ class SettingsPanel:
             highlightthickness=0,
             exportselection=False,
         )
-        self._priority_list.grid(column=0, row=1, rowspan=3, sticky="nsew")
+        self._priority_list.grid(column=0, row=2, rowspan=3, sticky="nsew")
         self._priority_list.insert("end", *self._settings.priority)
 
         # Add drag and drop functionality with visual feedback
@@ -1686,10 +1754,10 @@ class SettingsPanel:
 
         # Add right-click context menu
         self._priority_menu = tk.Menu(self._priority_list, tearoff=0)
-        self._priority_menu.add_command(label="Move to Top", command=lambda: self._priority_move_to_position(0))
-        self._priority_menu.add_command(label="Move to Bottom", command=lambda: self._priority_move_to_position(-1))
+        self._priority_menu.add_command(label=_("gui", "settings", "priority_context_menu", "move_to_top"), command=lambda: self._priority_move_to_position(0))
+        self._priority_menu.add_command(label=_("gui", "settings", "priority_context_menu", "move_to_bottom"), command=lambda: self._priority_move_to_position(-1))
         self._priority_menu.add_separator()
-        self._priority_menu.add_command(label="Move to Position...", command=self._priority_move_to_custom_position)
+        self._priority_menu.add_command(label=_("gui", "settings", "priority_context_menu", "move_to_position"), command=self._priority_move_to_custom_position)
         self._priority_list.bind("<Button-3>", self._show_priority_context_menu)  # Right-click
         ttk.Button(
             priority_frame,
@@ -2143,6 +2211,130 @@ class SettingsPanel:
             # Convert from 1-based to 0-based indexing
             target_idx = position - 1
             self._priority_move_item(current_idx, target_idx)
+
+    def _steam_api_key_validate(self, entry: PlaceholderEntry) -> bool:
+        """Validate Steam API key and update button states."""
+        api_key = entry.get().strip()
+        self._settings.steam_api_key = api_key
+        self._settings.alter()
+
+        # Update button states based on both API key and Steam ID
+        self._update_steam_button_states()
+
+        return True
+
+    def _steam_id_validate(self, entry: PlaceholderEntry) -> bool:
+        """Validate Steam ID and update button states."""
+        steam_id = entry.get().strip()
+
+        # Basic Steam ID validation (should be numeric and 17 digits)
+        is_valid = steam_id.isdigit() and len(steam_id) == 17
+
+        if is_valid or not steam_id:  # Allow empty (will disable buttons)
+            self._settings.steam_id = steam_id
+            self._settings.alter()
+
+        # Update button states based on both API key and Steam ID
+        self._update_steam_button_states()
+
+        return True
+
+    def _update_steam_button_states(self):
+        """Update Steam sorting button states based on API key and Steam ID availability."""
+        has_api_key = bool(self._settings.steam_api_key.strip())
+        has_steam_id = bool(self._settings.steam_id.strip())
+
+        # Both API key and Steam ID are required
+        state = "normal" if (has_api_key and has_steam_id) else "disabled"
+
+        self._steam_sort_playtime.config(state=state)
+        self._steam_sort_release.config(state=state)
+        self._steam_sort_rating.config(state=state)
+
+    async def _steam_sort_games(self, sort_type: str):
+        """Generic Steam sorting function."""
+        if not self._settings.steam_api_key or not self._settings.steam_id:
+            return
+
+        try:
+            from steam_api import SteamAPIClient, SteamAPIError
+
+            # Get current priority list
+            current_priority = list(self._settings.priority)
+            if not current_priority:
+                return
+
+            # Create Steam API client
+            steam_client = SteamAPIClient(self._settings.steam_api_key)
+
+            # Use the user-provided Steam ID
+            steam_id = self._settings.steam_id.strip()
+
+            # Get user's games data
+            games_data = await steam_client.get_user_games_data(steam_id)
+
+            # Create a mapping of game names to Steam data
+            steam_games_map = {game.name.lower(): game for game in games_data}
+
+            # Sort the priority list based on Steam data
+            def get_sort_key(game_name: str):
+                steam_game = steam_games_map.get(game_name.lower())
+                if not steam_game:
+                    return (0, game_name)  # Games not found in Steam go to end
+
+                if sort_type == "playtime":
+                    return (-steam_game.playtime_forever, game_name)
+                elif sort_type == "release_date":
+                    # Convert date string to sortable format
+                    if steam_game.release_date:
+                        try:
+                            from datetime import datetime
+                            date_obj = datetime.strptime(steam_game.release_date, "%d %b, %Y")
+                            return (-date_obj.timestamp(), game_name)
+                        except ValueError:
+                            return (0, game_name)
+                    return (0, game_name)
+                elif sort_type == "rating":
+                    rating = steam_game.rating if steam_game.rating else 0
+                    return (-rating, game_name)
+                else:
+                    return (0, game_name)
+
+            # Sort the priority list
+            sorted_priority = sorted(current_priority, key=get_sort_key)
+
+            # Update the settings and GUI
+            self._settings.priority = sorted_priority
+            self._settings.alter()
+
+            # Update the GUI listbox
+            self._priority_list.delete(0, "end")
+            self._priority_list.insert("end", *sorted_priority)
+
+            # Note: We don't close the client here as it's created fresh each time
+            # In a production app, you'd want to manage the client lifecycle better
+
+        except ImportError:
+            # Handle case where steam_api module is not available
+            pass
+        except Exception as e:
+            # Handle other errors gracefully
+            print(f"Steam sorting error: {e}")
+
+    def _steam_sort_by_playtime(self):
+        """Sort priority list by Steam playtime."""
+        import asyncio
+        asyncio.create_task(self._steam_sort_games("playtime"))
+
+    def _steam_sort_by_release_date(self):
+        """Sort priority list by Steam release date."""
+        import asyncio
+        asyncio.create_task(self._steam_sort_games("release_date"))
+
+    def _steam_sort_by_rating(self):
+        """Sort priority list by Steam rating."""
+        import asyncio
+        asyncio.create_task(self._steam_sort_games("rating"))
 
 
 class HelpTab:

@@ -135,20 +135,46 @@
         "settings": {
             "general": {
                 "name": "General",
+                "language": "Language 🌐 (requires restart): ",
                 "dark_theme": "Dark theme: ",
                 "autostart": "Autostart: ",
                 "tray": "Autostart into tray: ",
                 "tray_notifications": "Tray notifications: ",
                 "priority_only": "Priority Only: ",
                 "prioritize_by_ending_soonest": "Prioritize by ending soonest: ",
+                "steam_api": {
+                    "api_key": "Steam API Key: ",
+                    "api_key_placeholder": "Enter your Steam API Key",
+                    "id": "Steam ID: ",
+                    "id_help": "💡 Find your Steam ID at: steamidfinder.com or steamid.io",
+                    "id_placeholder": "Enter your Steam ID (e.g., 76561198000000000)"
+                },
                 "unlinked_campaigns": "Allow Unlinked Campaigns: ",
-                "proxy": "Proxy (requires restart):"
+                "proxy": "Proxy (requires restart):",
+                "priority_algorithm": "Priority Algorithm: ",
+                "priority_algorithms": {
+                    "priority_list": "Priority List",
+                    "adaptive_priority": "Adaptive Priority",
+                    "balanced_priority": "Balanced Priority",
+                    "ending_soonest": "Ending Soonest"
+                }
             },
             "game_name": "Game name",
             "priority": "Priority",
             "exclude": "Exclude",
             "reload": "Reload",
-            "reload_text": "Most changes require a reload to take an immediate effect: "
+            "reload_text": "Most changes require a reload to take an immediate effect: ",
+            "sorting": {
+                "name": "Sorting",
+                "playtime": "Sort by Playtime ⏱️",
+                "release_date": "Sort by Release Date 📅",
+                "rating": "Sort by Rating ⭐"
+            },
+            "priority_context_menu": {
+                "move_to_top": "Move to Top",
+                "move_to_bottom": "Move to Bottom",
+                "move_to_position": "Move to Position..."
+            }
         },
         "help": {
             "links": {

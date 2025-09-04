@@ -31,6 +31,8 @@ class SettingsFile(TypedDict):
     connection_quality: int
     tray_notifications: bool
     window_position: str
+    steam_api_key: str
+    steam_id: str
 
 
 default_settings: SettingsFile = {
@@ -47,6 +49,8 @@ default_settings: SettingsFile = {
     "language": DEFAULT_LANG,
     "tray_notifications": True,
     "window_position": "",
+    "steam_api_key": "",
+    "steam_id": "",
 }
 
 
@@ -73,6 +77,8 @@ class Settings:
     connection_quality: int
     tray_notifications: bool
     window_position: str
+    steam_api_key: str
+    steam_id: str
 
     PASSTHROUGH = ("_settings", "_args", "_altered")
 
