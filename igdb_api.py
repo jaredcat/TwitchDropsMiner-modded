@@ -316,6 +316,10 @@ class IGDBAPIClient:
                     game = self._create_game_from_data(game_data)
                     all_games.append(game)
 
+                    # Cache individual game data
+                    cache_key = self._get_cache_key(f"game_{game_data['id']}")
+                    self._cache_data(cache_key, game_data)
+
                 # Small delay between batches
                 if i + batch_size < len(game_names):
                     await asyncio.sleep(0.5)
