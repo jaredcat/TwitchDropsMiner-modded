@@ -1593,9 +1593,25 @@ class SettingsPanel:
         priority_algorithm_frame = ttk.Frame(center_frame2)
         priority_algorithm_frame.grid(column=0, row=2)
         ttk.Label(priority_algorithm_frame, text="Priority Algorithm: ").grid(column=0, row=0, sticky="e")
+        # Map setting values to display names
+        algorithm_display_map = {
+            PRIORITY_ALGORITHM_LIST: "Default",
+            PRIORITY_ALGORITHM_SMART: "Smart Priority",
+            PRIORITY_ALGORITHM_ENDING_SOONEST: "Ending Soonest",
+            PRIORITY_ALGORITHM_WEIGHTED: "Weighted Priority",
+        }
+        # Ensure we always have a valid algorithm setting and display name
+        current_algorithm = getattr(self._settings, 'priority_algorithm', PRIORITY_ALGORITHM_LIST)
+        current_algorithm_display = algorithm_display_map.get(current_algorithm, "Default")
+
+        # If setting is invalid, reset it to default
+        if current_algorithm not in algorithm_display_map:
+            self._settings.priority_algorithm = PRIORITY_ALGORITHM_LIST
+            current_algorithm_display = "Default"
+
         self._priority_algorithm_menu = SelectMenu(
             priority_algorithm_frame,
-            default=self._settings.priority_algorithm,
+            default=current_algorithm_display,
             options={
                 "Default": PRIORITY_ALGORITHM_LIST,
                 "Smart Priority": PRIORITY_ALGORITHM_SMART,
