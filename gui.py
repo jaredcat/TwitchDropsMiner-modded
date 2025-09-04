@@ -2286,18 +2286,25 @@ class SettingsPanel:
 
     async def _steam_sort_games(self, sort_type: str):
         """Generic Steam sorting function."""
+        print(f"_steam_sort_games called with sort_type: {sort_type}")
         if sort_type == "playtime":
             # Only playtime sorting requires Steam API and ownership
             if not self._settings.steam_api_key or not self._settings.steam_id:
                 print("Steam API key or Steam ID missing - required for playtime sorting")
                 return
+            print("Calling _steam_sort_by_playtime_impl")
             await self._steam_sort_by_playtime_impl()
         elif sort_type == "release_date":
             # Simple alphabetical sort as fallback (could be enhanced with IGDB later)
+            print("Calling _simple_sort_by_release_date")
             await self._simple_sort_by_release_date()
         elif sort_type == "rating":
             # Simple reverse alphabetical sort as fallback (could be enhanced with IGDB later)
+            print("Calling _simple_sort_by_rating")
             await self._simple_sort_by_rating()
+        else:
+            print(f"Unknown sort_type: {sort_type}")
+        print(f"_steam_sort_games completed for {sort_type}")
 
     async def _steam_sort_by_playtime_impl(self):
         """Sort by Steam playtime - only for owned games."""
@@ -2387,29 +2394,39 @@ class SettingsPanel:
 
     def _update_priority_list_safely(self, sorted_priority: list[str]):
         """Safely update the priority list and GUI from any thread."""
+        print(f"_update_priority_list_safely called with {len(sorted_priority)} games")
+        
         # Update the settings
         self._settings.priority = sorted_priority
         self._settings.alter()
+        print("Settings updated successfully")
 
         # Update GUI safely
         def update_gui():
             try:
+                print("Updating GUI list...")
                 self._priority_list.delete(0, "end")
                 self._priority_list.insert("end", *sorted_priority)
                 print(f"GUI updated with {len(sorted_priority)} games")
             except Exception as e:
                 print(f"Error updating GUI: {e}")
+                import traceback
+                traceback.print_exc()
 
         # Try to schedule on main thread, with fallback
+        print("Scheduling GUI update...")
         try:
             if hasattr(self._root, 'after_idle'):
                 self._root.after_idle(update_gui)
+                print("GUI update scheduled successfully")
             else:
                 print("Warning: Could not schedule GUI update - after_idle not available")
         except RuntimeError as e:
             print(f"Warning: Could not schedule GUI update - {e}")
         except Exception as e:
             print(f"Unexpected error scheduling GUI update: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
