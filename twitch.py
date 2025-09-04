@@ -805,7 +805,7 @@ class Twitch:
         # Scale back to reasonable range and add base priority
         final_score = user_priority + (weighted_score * 10)
 
-        logger.log(CALL, f"WEIGHTED: {campaign.game.name} - Priority: {user_priority}, "
+        logger.warning(f"WEIGHTED: {campaign.game.name} - Priority: {user_priority}, "
                    f"Time remaining: {time_remaining_hours:.1f}h, "
                    f"Normalized priority: {normalized_priority:.2f}, "
                    f"Time urgency: {time_urgency:.2f}, "
@@ -849,7 +849,7 @@ class Twitch:
         # Determine risk level for logging
         risk_level = "LOW" if time_risk < 0.3 else "MEDIUM" if time_risk < 0.7 else "HIGH"
 
-        logger.log(CALL, f"SMART: {campaign.game.name} - Priority: {user_priority}, "
+        logger.warning(f"SMART: {campaign.game.name} - Priority: {user_priority}, "
                    f"Time remaining: {time_remaining_hours:.1f}h, "
                    f"Minutes needed: {minutes_needed}, "
                    f"Hours needed: {hours_needed:.1f}h, "
@@ -926,9 +926,9 @@ class Twitch:
                 campaigns = self.inventory
                 filtered_campaigns = list(filter(self.filter_campaigns, campaigns))
 
-                logger.log(CALL, f"PRIORITY_ALGORITHM: Using '{priority_algorithm}' algorithm")
-                logger.log(CALL, f"PRIORITY_ALGORITHM: Found {len(filtered_campaigns)} eligible campaigns")
-                logger.log(CALL, f"PRIORITY_ALGORITHM: User priority list: {list(priorities.keys())}")
+                logger.warning(f"PRIORITY_ALGORITHM: Using '{priority_algorithm}' algorithm")
+                logger.warning(f"PRIORITY_ALGORITHM: Found {len(filtered_campaigns)} eligible campaigns")
+                logger.warning(f"PRIORITY_ALGORITHM: User priority list: {list(priorities.keys())}")
 
                 # Sort campaigns based on selected algorithm
                 if priority_algorithm == PRIORITY_ALGORITHM_ENDING_SOONEST:
@@ -948,7 +948,7 @@ class Twitch:
                             self.wanted_games[game] = -i
                             logger.log(CALL, f"ENDING_SOONEST: {game.name} - Non-priority game, Score: {-i}")
                 elif priority_algorithm == PRIORITY_ALGORITHM_WEIGHTED:
-                    logger.log(CALL, "WEIGHTED: Using weighted priority algorithm (70% priority + 30% time urgency)")
+                    logger.warning("WEIGHTED: Using weighted priority algorithm (70% priority + 30% time urgency)")
                     # Weighted priority: blend user priority with time urgency
                     for i, campaign in enumerate(filtered_campaigns):
                         game = campaign.game
@@ -964,7 +964,7 @@ class Twitch:
                             logger.log(CALL, f"WEIGHTED: {game.name} - Non-priority game, "
                                        f"Time remaining: {time_remaining:.1f}h, Score: {-time_remaining:.2f}")
                 elif priority_algorithm == PRIORITY_ALGORITHM_SMART:
-                    logger.log(CALL, "SMART: Using smart priority algorithm (priority + completion risk)")
+                    logger.warning("SMART: Using smart priority algorithm (priority + completion risk)")
                     # Smart priority: ensure higher priority games complete before lower ones
                     for i, campaign in enumerate(filtered_campaigns):
                         game = campaign.game
@@ -979,7 +979,7 @@ class Twitch:
                             logger.log(CALL, f"SMART: {game.name} - Non-priority game, "
                                        f"Time remaining: {time_remaining:.1f}h, Score: {-time_remaining:.2f}")
                 else:
-                    logger.log(CALL, "DEFAULT: Using default priority list algorithm (user-defined order)")
+                    logger.warning("DEFAULT: Using default priority list algorithm (user-defined order)")
                     # Default priority list: use user-defined order (original behavior)
                     for i, campaign in enumerate(filtered_campaigns):
                         game = campaign.game
@@ -993,9 +993,9 @@ class Twitch:
 
                 # Log final results
                 sorted_games = sorted(self.wanted_games.items(), key=lambda x: x[1], reverse=True)
-                logger.log(CALL, "PRIORITY_ALGORITHM: Final game priority order:")
+                logger.warning("PRIORITY_ALGORITHM: Final game priority order:")
                 for rank, (game, score) in enumerate(sorted_games, 1):
-                    logger.log(CALL, f"  {rank}. {game.name} (Score: {score:.2f})")
+                    logger.warning(f"  {rank}. {game.name} (Score: {score:.2f})")
                 full_cleanup = True
                 self.restart_watching()
                 self.change_state(State.CHANNELS_CLEANUP)
