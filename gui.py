@@ -2408,27 +2408,14 @@ class SettingsPanel:
         except Exception as e:
             print(f"Manager save failed: {e}")
 
-        # Use event_generate to safely update GUI from background thread
+        # Fallback: queue update for GUI main thread to apply in _poll loop
         import logging
         logger = logging.getLogger("TwitchDrops")
-        logger.info("Triggering GUI update event from background thread...")
-
         try:
-            # Store the sorted list for the event handler to access
-            logger.info("Storing sorted priority list...")
-            self._pending_sorted_priority = sorted_priority
-            logger.info(f"Stored {len(sorted_priority)} games")
-
-            # Generate a custom event that will be handled in the main thread
-            logger.info("About to generate event...")
-            self._manager._root.event_generate("<<priority_list_updated>>", when="tail")
-            logger.info("GUI update event generated successfully")
+            self._manager._pending_priority_update = sorted_priority
+            logger.info("Queued priority list update for GUI thread")
         except Exception as e:
-            logger.error(f"Failed to generate GUI update event: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-
-        logger.info("_update_priority_list_safely method completed")
+            logger.error(f"Failed to queue GUI update: {e}")
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
@@ -2895,7 +2882,21 @@ class GUIManager:
         while True:
             try:
                 update()
-
+                # Apply any pending priority update from background thread
+                if hasattr(self, '_pending_priority_update'):
+                    try:
+                        pending = self._pending_priority_update
+                        # Update SettingsPanel listbox safely in main thread
+                        self.settings._priority_list.delete(0, "end")
+                        self.settings._priority_list.insert("end", *pending)
+                        # Clear flag
+                        delattr(self, '_pending_priority_update')
+                    except Exception:
+                        # Do not crash the loop; clear on failure
+                        try:
+                            delattr(self, '_pending_priority_update')
+                        except Exception:
+                            pass
 
             except tk.TclError:
                 # root has been destroyed
