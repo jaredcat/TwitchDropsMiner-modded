@@ -167,7 +167,7 @@ class GUISettingsGeneral(TypedDict):
     tray: str
     tray_notifications: str
     priority_only: str
-    prioritize_by_ending_soonest: str
+    priority_algorithm: str
     unlinked_campaigns: str
     proxy: str
     dark_theme: str
