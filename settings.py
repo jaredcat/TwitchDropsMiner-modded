@@ -32,7 +32,7 @@ class SettingsFile(TypedDict):
     tray_notifications: bool
     window_position: str
     igdb_client_id: str
-    igdb_access_token: str
+    igdb_client_secret: str
 
 
 default_settings: SettingsFile = {
@@ -52,7 +52,7 @@ default_settings: SettingsFile = {
     "steam_api_key": "",
     "steam_id": "",
     "igdb_client_id": "",
-    "igdb_access_token": "",
+    "igdb_client_secret": "",
 }
 
 
@@ -80,7 +80,7 @@ class Settings:
     tray_notifications: bool
     window_position: str
     igdb_client_id: str
-    igdb_access_token: str
+    igdb_client_secret: str
 
     PASSTHROUGH = ("_settings", "_args", "_altered")
 

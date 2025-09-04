@@ -40,10 +40,11 @@ class IGDBAPIClient:
     IGDB_CACHE_FILE = IGDB_CACHE_DB
 
 
-    def __init__(self, client_id: str, access_token: str):
+    def __init__(self, client_id: str, client_secret: str):
         print(f"Initializing IGDBAPIClient with client ID: {client_id[:8]}...")
         self.client_id = client_id
-        self.access_token = access_token
+        self.client_secret = client_secret
+        self.access_token: Optional[str] = None
         self._session: Optional[aiohttp.ClientSession] = None
         self._memory_cache: Dict[str, Any] = {}
         self._memory_cache_timestamps: Dict[str, datetime] = {}
@@ -52,12 +53,43 @@ class IGDBAPIClient:
         # Load persistent cache from igdb_data.json
         self._load_persistent_cache()
 
+    async def _get_access_token(self) -> str:
+        """Get access token using client credentials."""
+        if self.access_token:
+            return self.access_token
+
+        print("Getting IGDB access token...")
+        async with aiohttp.ClientSession() as session:
+            data = {
+                'client_id': self.client_id,
+                'client_secret': self.client_secret,
+                'grant_type': 'client_credentials'
+            }
+
+            async with session.post('https://id.twitch.tv/oauth2/token', data=data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    self.access_token = result['access_token']
+                    print("IGDB access token obtained successfully")
+                    return self.access_token
+                else:
+                    error_text = await response.text()
+                    raise IGDBAPIError(f"Failed to get access token: {response.status} - {error_text}")
+
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
         if self._session is None or self._session.closed:
+            # Get access token first
+            access_token = await self._get_access_token()
+
             # Create a connector with proper limits to avoid resource warnings
             connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
-            self._session = aiohttp.ClientSession(connector=connector)
+            headers = {
+                'Client-ID': self.client_id,
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/json'
+            }
+            self._session = aiohttp.ClientSession(connector=connector, headers=headers)
         return self._session
 
     async def close(self):

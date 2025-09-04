@@ -1501,7 +1501,7 @@ class _SettingsVars(TypedDict):
     tray: IntVar
     proxy: StringVar
     igdb_client_id: StringVar
-    igdb_access_token: StringVar
+    igdb_client_secret: StringVar
     dark_theme: IntVar
     autostart: IntVar
     priority_only: IntVar
@@ -1523,7 +1523,7 @@ class SettingsPanel:
         self._vars: _SettingsVars = {
             "proxy": StringVar(master, str(self._settings.proxy)),
             "igdb_client_id": StringVar(master, self._settings.igdb_client_id),
-            "igdb_access_token": StringVar(master, self._settings.igdb_access_token),
+            "igdb_client_secret": StringVar(master, self._settings.igdb_client_secret),
             "tray": IntVar(master, self._settings.autostart_tray),
             "dark_theme": IntVar(master, self._settings.dark_theme),
             "autostart": IntVar(master, self._settings.autostart),
@@ -1670,19 +1670,19 @@ class SettingsPanel:
 # IGDB Access Token frame
         igdb_token_frame = ttk.Frame(center_frame2)
         igdb_token_frame.grid(column=0, row=5)
-        ttk.Label(igdb_token_frame, text="IGDB Access Token:").grid(column=0, row=0)
-        self._igdb_access_token = PlaceholderEntry(
+        ttk.Label(igdb_token_frame, text=_("gui", "settings", "general", "igdb_api", "client_secret")).grid(column=0, row=0)
+        self._igdb_client_secret = PlaceholderEntry(
             igdb_token_frame,
             width=37,
-            textvariable=self._vars["igdb_access_token"],
-            placeholder=_("gui", "settings", "general", "igdb_api", "access_token_placeholder"),
+            textvariable=self._vars["igdb_client_secret"],
+            placeholder=_("gui", "settings", "general", "igdb_api", "client_secret_placeholder"),
             is_password=True
         )
-        self._igdb_access_token.config(
+        self._igdb_client_secret.config(
             validate="focusout",
-            validatecommand=partial(self._igdb_access_token_validate, self._igdb_access_token)
+            validatecommand=partial(self._igdb_client_secret_validate, self._igdb_client_secret)
         )
-        self._igdb_access_token.grid(column=0, row=1)
+        self._igdb_client_secret.grid(column=0, row=1)
         # Add help text for IGDB Access Token
         help_text = ttk.Label(
             igdb_token_frame,
@@ -2220,19 +2220,19 @@ class SettingsPanel:
 
 
     def _update_igdb_button_states(self):
-        """Update IGDB sorting button states based on Client ID and Access Token availability."""
+        """Update IGDB sorting button states based on Client ID and Client Secret availability."""
         try:
             has_client_id = bool(self._settings.igdb_client_id.strip())
-            has_access_token = bool(self._settings.igdb_access_token.strip())
+            has_client_secret = bool(self._settings.igdb_client_secret.strip())
 
             # Both release date and rating sorting require IGDB credentials
-            button_state = "normal" if (has_client_id and has_access_token) else "disabled"
+            button_state = "normal" if (has_client_id and has_client_secret) else "disabled"
 
             self._igdb_sort_release.config(state=button_state)
             self._igdb_sort_rating.config(state=button_state)
 
-            if not (has_client_id and has_access_token):
-                print("IGDB sorting disabled - Client ID or Access Token missing")
+            if not (has_client_id and has_client_secret):
+                print("IGDB sorting disabled - Client ID or Client Secret missing")
 
         except Exception as e:
             print(f"IGDB button state update error: {e}")
@@ -2258,7 +2258,7 @@ class SettingsPanel:
         print(f"Sorting {len(current_priority)} games by release date using IGDB")
 
         # Check if we have IGDB credentials
-        if not self._settings.igdb_client_id or not self._settings.igdb_access_token:
+        if not self._settings.igdb_client_id or not self._settings.igdb_client_secret:
             print("IGDB credentials missing - keeping original priority order")
             return
 
@@ -2281,7 +2281,7 @@ class SettingsPanel:
             print(f"Found {len(game_ids)} IGDB game IDs")
 
             # Use IGDB API to get game data
-            async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_access_token) as igdb_client:
+            async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_client_secret) as igdb_client:
                 games_data = await igdb_client.get_games_data(game_ids)
                 print(f"Retrieved {len(games_data)} games from IGDB")
 
@@ -2333,7 +2333,7 @@ class SettingsPanel:
         print(f"Sorting {len(current_priority)} games by rating using IGDB")
 
         # Check if we have IGDB credentials
-        if not self._settings.igdb_client_id or not self._settings.igdb_access_token:
+        if not self._settings.igdb_client_id or not self._settings.igdb_client_secret:
             print("IGDB credentials missing - keeping original priority order")
             return
 
@@ -2356,7 +2356,7 @@ class SettingsPanel:
             print(f"Found {len(game_ids)} IGDB game IDs")
 
             # Use IGDB API to get game data
-            async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_access_token) as igdb_client:
+            async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_client_secret) as igdb_client:
                 games_data = await igdb_client.get_games_data(game_ids)
                 print(f"Retrieved {len(games_data)} games from IGDB")
 
@@ -2437,7 +2437,7 @@ class SettingsPanel:
         """Sort priority list by IGDB rating."""
         print("=== IGDB sort by rating clicked ===")
         print(f"Client ID present: {bool(self._settings.igdb_client_id)}")
-        print(f"Access Token present: {bool(self._settings.igdb_access_token)}")
+        print(f"Client Secret present: {bool(self._settings.igdb_client_secret)}")
         print(f"Client ID value: {self._settings.igdb_client_id[:8]}...")
         print(f"Priority list length: {len(self._settings.priority)}")
         self._run_igdb_sort("rating")
@@ -2529,11 +2529,11 @@ class SettingsPanel:
         self._update_igdb_button_states()
         return True
 
-    def _igdb_access_token_validate(self, entry: PlaceholderEntry) -> bool:
-        """Validate IGDB Access Token input."""
-        access_token = entry.get().strip()
-        entry.replace(access_token)
-        self._settings.igdb_access_token = access_token
+    def _igdb_client_secret_validate(self, entry: PlaceholderEntry) -> bool:
+        """Validate IGDB Client Secret input."""
+        client_secret = entry.get().strip()
+        entry.replace(client_secret)
+        self._settings.igdb_client_secret = client_secret
         self._update_igdb_button_states()
         return True
 
