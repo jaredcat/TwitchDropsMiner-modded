@@ -96,9 +96,12 @@ class PlaceholderEntry(ttk.Entry):
         # Set up textvariable after initialization
         if self._textvariable:
             self.config(textvariable=self._textvariable)
-            # If there's already a value, don't show placeholder
+            # If there's already a value, don't show placeholder but ensure password masking
             if self._textvariable.get():
                 self._ph = False
+                # Ensure password masking is active
+                if self._is_password:
+                    self.config(show='•')
             else:
                 self._ph = True
         else:
@@ -2319,26 +2322,46 @@ class SettingsPanel:
                 async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_client_secret) as igdb_client:
                     return await igdb_client.sort_games_by_release_date(current_priority, self._manager._twitch.wanted_games)
 
-            # Run the async function
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # Use existing event loop or create a new one
             try:
-                sorted_priority = loop.run_until_complete(sort_games())
-                print(f"Sorted {len(sorted_priority)} games by release date")
+                loop = asyncio.get_running_loop()
+                # If we're in an existing loop, we need to run in a thread
+                import threading
+                import concurrent.futures
 
-                # Update the priority list
-                self._settings.priority = sorted_priority
-                self._settings.alter()
-                self._settings.save(force=True)
+                def run_in_thread():
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    try:
+                        return new_loop.run_until_complete(sort_games())
+                    finally:
+                        new_loop.close()
 
-                # Update GUI
-                self._priority_list.delete(0, tk.END)
-                for game in sorted_priority:
-                    self._priority_list.insert(tk.END, game)
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_in_thread)
+                    sorted_priority = future.result(timeout=60)
+            except RuntimeError:
+                # No running loop, create a new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    sorted_priority = loop.run_until_complete(sort_games())
+                finally:
+                    loop.close()
 
-                print("Priority list updated successfully")
-            finally:
-                loop.close()
+            print(f"Sorted {len(sorted_priority)} games by release date")
+
+            # Update the priority list
+            self._settings.priority = sorted_priority
+            self._settings.alter()
+            self._settings.save(force=True)
+
+            # Update GUI
+            self._priority_list.delete(0, tk.END)
+            for game in sorted_priority:
+                self._priority_list.insert(tk.END, game)
+
+            print("Priority list updated successfully")
 
         except ImportError as e:
             print(f"IGDB API module not available: {e}")
@@ -2375,26 +2398,46 @@ class SettingsPanel:
                 async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_client_secret) as igdb_client:
                     return await igdb_client.sort_games_by_rating(current_priority, self._manager._twitch.wanted_games)
 
-            # Run the async function
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # Use existing event loop or create a new one
             try:
-                sorted_priority = loop.run_until_complete(sort_games())
-                print(f"Sorted {len(sorted_priority)} games by rating")
+                loop = asyncio.get_running_loop()
+                # If we're in an existing loop, we need to run in a thread
+                import threading
+                import concurrent.futures
 
-                # Update the priority list
-                self._settings.priority = sorted_priority
-                self._settings.alter()
-                self._settings.save(force=True)
+                def run_in_thread():
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    try:
+                        return new_loop.run_until_complete(sort_games())
+                    finally:
+                        new_loop.close()
 
-                # Update GUI
-                self._priority_list.delete(0, tk.END)
-                for game in sorted_priority:
-                    self._priority_list.insert(tk.END, game)
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_in_thread)
+                    sorted_priority = future.result(timeout=60)
+            except RuntimeError:
+                # No running loop, create a new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    sorted_priority = loop.run_until_complete(sort_games())
+                finally:
+                    loop.close()
 
-                print("Priority list updated successfully")
-            finally:
-                loop.close()
+            print(f"Sorted {len(sorted_priority)} games by rating")
+
+            # Update the priority list
+            self._settings.priority = sorted_priority
+            self._settings.alter()
+            self._settings.save(force=True)
+
+            # Update GUI
+            self._priority_list.delete(0, tk.END)
+            for game in sorted_priority:
+                self._priority_list.insert(tk.END, game)
+
+            print("Priority list updated successfully")
 
         except ImportError as e:
             print(f"IGDB API module not available: {e}")
