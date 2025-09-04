@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timezone, timedelta
 
 import aiohttp
-from yarl import URL
 
 from constants import JsonType, IGDB_CACHE_DB
 from utils import json_load, json_save
@@ -294,17 +293,40 @@ class IGDBAPIClient:
 
         print(f"Searching IGDB for {len(game_names)} games by name")
 
-        # Process in batches to avoid API limits
-        batch_size = 50  # Smaller batches for name searches
+        # Check cache first for any games we already have
         all_games = []
+        games_to_search = []
 
-        for i in range(0, len(game_names), batch_size):
-            batch_names = game_names[i:i + batch_size]
+        for name in game_names:
+            # Check if we already have this game cached by searching through all cached games
+            found_in_cache = False
+            for cache_key, cache_entry in self._persistent_cache.items():
+                if cache_key.startswith("igdb_game_") and cache_entry.get("search_term") == name:
+                    # Found cached game for this search term
+                    cached_data = cache_entry["data"]
+                    game = self._create_game_from_data(cached_data)
+                    all_games.append(game)
+                    found_in_cache = True
+                    print(f"Using cached data for '{name}' (ID: {game.igdb_id})")
+                    break
+
+            if not found_in_cache:
+                games_to_search.append(name)
+
+        if not games_to_search:
+            print(f"All {len(game_names)} games found in cache")
+            return all_games
+
+        print(f"Found {len(all_games)} games in cache, searching IGDB for {len(games_to_search)} games")
+
+        # Process remaining games in batches to avoid API limits
+        batch_size = 50  # Smaller batches for name searches
+
+        for i in range(0, len(games_to_search), batch_size):
+            batch_names = games_to_search[i:i + batch_size]
             print(f"Processing name batch {i//batch_size + 1}: {len(batch_names)} games")
 
-            # Build search query for IGDB API
             # Search for each game individually to get better matches
-            all_games = []
             for name in batch_names:
                 # Escape special characters and add fuzzy matching
                 escaped_name = name.replace('"', '\\"')
@@ -336,7 +358,7 @@ class IGDBAPIClient:
                     continue
 
             # Small delay between batches
-            if i + batch_size < len(game_names):
+            if i + batch_size < len(games_to_search):
                 await asyncio.sleep(0.5)
 
         print(f"Successfully found {len(all_games)} games total")
@@ -453,7 +475,6 @@ class IGDBAPIClient:
         for cache_key, cache_entry in self._persistent_cache.items():
             if cache_key.startswith("igdb_"):
                 cached_time = datetime.fromisoformat(cache_entry["timestamp"])
-                age = now - cached_time
                 timestamps.append(cached_time)
 
         if timestamps:
