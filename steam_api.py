@@ -123,7 +123,7 @@ class SteamAPIClient:
 
         # Check memory cache first
         if self._is_memory_cache_valid(cache_key):
-            logger.debug(f"Using memory cached data for {url}")
+            print(f"Using memory cached data for {url}")
             return self._memory_cache[cache_key]
 
         session = await self.get_session()
@@ -174,19 +174,19 @@ class SteamAPIClient:
             "include_played_free_games": "1"
         }
 
-        logger.info(f"Requesting owned games for Steam ID: {steam_id}")
-        logger.debug(f"API URL: {url}")
-        logger.debug(f"API Key: {self.api_key[:8]}...")
+        print(f"Requesting owned games for Steam ID: {steam_id}")
+        print(f"API URL: {url}")
+        print(f"API Key: {self.api_key[:8]}...")
 
         try:
             data = await self._make_request(url, params)
-            logger.debug(f"Received response: {data}")
+            print(f"Received response: {data}")
 
             games = []
             response_data = data.get("response", {})
 
             if "games" not in response_data:
-                logger.warning(f"No games found in response: {response_data}")
+                print(f"No games found in response: {response_data}")
                 return []
 
             for game_data in response_data.get("games", []):
@@ -197,7 +197,7 @@ class SteamAPIClient:
                 )
                 games.append(game)
 
-            logger.info(f"Retrieved {len(games)} owned games")
+            print(f"Retrieved {len(games)} owned games")
             return games
         except SteamAPIError as e:
             logger.error(f"Failed to get owned games: {e}")
@@ -272,7 +272,7 @@ class SteamAPIClient:
         # Check persistent cache first
         cached_data = self._get_cached_data(cache_key)
         if cached_data is not None:
-            logger.info(f"Using cached Steam games data for user {steam_id}")
+            print(f"Using cached Steam games data for user {steam_id}")
             # Convert cached data back to SteamGame objects
             games = []
             for game_data in cached_data:
@@ -286,7 +286,7 @@ class SteamAPIClient:
                 games.append(game)
             return games
 
-        logger.info(f"Fetching fresh Steam games data for user {steam_id}")
+        print(f"Fetching fresh Steam games data for user {steam_id}")
 
         # Get owned games
         owned_games = await self.get_owned_games(steam_id)
@@ -308,7 +308,7 @@ class SteamAPIClient:
             })
 
         self._cache_data(cache_key, cache_data)
-        logger.info(f"Cached Steam games data for user {steam_id}")
+        print(f"Cached Steam games data for user {steam_id}")
 
         return enriched_games
 

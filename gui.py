@@ -2439,20 +2439,27 @@ class SettingsPanel:
                 except Exception as cleanup_error:
                     print(f"Error during cleanup: {cleanup_error}")
 
-                # Re-enable buttons and restore text
-                def restore_buttons():
-                    self._steam_sort_playtime.config(state="normal", text="⏱️")
-                    self._steam_sort_release.config(state="normal", text="📅")
-                    self._steam_sort_rating.config(state="normal", text="⭐")
-                    self._update_steam_button_states()
-
-                # Schedule button restoration on the main thread
-                self._root.after(0, restore_buttons)
+                                # Re-enable buttons and restore text (thread-safe)
+                try:
+                    # Use after_idle to schedule on the main thread
+                    self._root.after_idle(lambda: self._restore_steam_buttons())
+                except Exception as restore_error:
+                    print(f"Error restoring buttons: {restore_error}")
 
         # Run in a separate thread to avoid blocking the GUI
         thread = threading.Thread(target=run_steam_sort_thread, daemon=True)
         thread.start()
         print("Steam sort thread started")
+
+    def _restore_steam_buttons(self):
+        """Restore Steam sorting buttons to their normal state (called from main thread)."""
+        try:
+            self._steam_sort_playtime.config(state="normal", text="⏱️")
+            self._steam_sort_release.config(state="normal", text="📅")
+            self._steam_sort_rating.config(state="normal", text="⭐")
+            self._update_steam_button_states()
+        except Exception as e:
+            print(f"Error restoring Steam buttons: {e}")
 
 
 class HelpTab:
