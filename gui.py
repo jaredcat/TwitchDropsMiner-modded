@@ -1743,8 +1743,7 @@ class SettingsPanel:
             igdb_sorting_frame,
             text=_("gui", "settings", "sorting", "release_date"),
             command=self._igdb_sort_by_release_date,
-            state="disabled",
-            width=3
+            state="disabled"
         )
         self._igdb_sort_release.grid(column=0, row=0, padx=1, pady=1)
 
@@ -1752,8 +1751,7 @@ class SettingsPanel:
             igdb_sorting_frame,
             text=_("gui", "settings", "sorting", "rating"),
             command=self._igdb_sort_by_rating,
-            state="disabled",
-            width=3
+            state="disabled"
         )
         self._igdb_sort_rating.grid(column=1, row=0, padx=1, pady=1)
 
@@ -1761,8 +1759,7 @@ class SettingsPanel:
             igdb_sorting_frame,
             text=_("gui", "settings", "sorting", "popularity"),
             command=self._igdb_sort_by_popularity,
-            state="disabled",
-            width=3
+            state="disabled"
         )
         self._igdb_sort_popularity.grid(column=2, row=0, padx=1, pady=1)
 
@@ -2261,19 +2258,41 @@ class SettingsPanel:
         try:
             has_client_id = bool(self._settings.igdb_client_id.strip())
             has_client_secret = bool(self._settings.igdb_client_secret.strip())
+            has_inventory = bool(self._manager._twitch.inventory)
 
-            # All IGDB sorting requires credentials
-            button_state = "normal" if (has_client_id and has_client_secret) else "disabled"
+            # All IGDB sorting requires credentials AND inventory to be loaded
+            button_state = "normal" if (has_client_id and has_client_secret and has_inventory) else "disabled"
 
             self._igdb_sort_release.config(state=button_state)
             self._igdb_sort_rating.config(state=button_state)
             self._igdb_sort_popularity.config(state=button_state)
 
-            if not (has_client_id and has_client_secret):
+            if not has_inventory:
+                print("IGDB sorting disabled - Twitch campaigns not loaded yet")
+            elif not (has_client_id and has_client_secret):
                 print("IGDB sorting disabled - Client ID or Client Secret missing")
 
         except Exception as e:
             print(f"IGDB button state update error: {e}")
+
+    def enable_igdb_buttons(self):
+        """Enable IGDB sorting buttons after inventory is loaded."""
+        try:
+            # Update button states based on current credentials and inventory
+            self._update_igdb_button_states()
+            print("IGDB sorting buttons enabled - Twitch campaigns loaded")
+        except Exception as e:
+            print(f"Error enabling IGDB buttons: {e}")
+
+    def disable_igdb_buttons(self):
+        """Disable IGDB sorting buttons when inventory is cleared."""
+        try:
+            self._igdb_sort_release.config(state="disabled")
+            self._igdb_sort_rating.config(state="disabled")
+            self._igdb_sort_popularity.config(state="disabled")
+            print("IGDB sorting buttons disabled - Twitch campaigns not loaded")
+        except Exception as e:
+            print(f"Error disabling IGDB buttons: {e}")
 
 
 
@@ -2544,6 +2563,7 @@ class SettingsPanel:
         client_id = entry.get().strip()
         entry.replace(client_id)
         self._settings.igdb_client_id = client_id
+        self._settings.alter()
         self._update_igdb_button_states()
         return True
 
@@ -2552,6 +2572,7 @@ class SettingsPanel:
         client_secret = entry.get().strip()
         entry.replace(client_secret)
         self._settings.igdb_client_secret = client_secret
+        self._settings.alter()
         self._update_igdb_button_states()
         return True
 

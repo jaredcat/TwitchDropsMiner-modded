@@ -697,6 +697,8 @@ class Twitch:
         self._drops.clear()
         self.channels.clear()
         self.inventory.clear()
+        # Disable IGDB sorting buttons when inventory is cleared
+        self.gui.settings.disable_igdb_buttons()
         self._auth_state.clear()
         self.wanted_games.clear()
         self._mnt_triggers.clear()
@@ -1858,6 +1860,9 @@ class Twitch:
         if self._mnt_task is not None and not self._mnt_task.done():
             self._mnt_task.cancel()
         self._mnt_task = asyncio.create_task(self._maintenance_task())
+        
+        # Enable IGDB sorting buttons now that inventory is loaded
+        self.gui.settings.enable_igdb_buttons()
 
     def get_active_drop(self, channel: Channel | None = None) -> TimedDrop | None:
         if not self.wanted_games:

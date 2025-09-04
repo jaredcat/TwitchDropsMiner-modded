@@ -335,20 +335,23 @@ class IGDBAPIClient:
                 fields id,name,first_release_date,rating,rating_count;
                 search "{escaped_name}";
                 where name ~ "{escaped_name}"*;
-                limit 5;
+                limit 1;
                 """
 
                 try:
                     data = await self._make_request("games", query)
                     print(f"IGDB search for '{name}' returned {len(data)} results")
 
-                    for game_data in data:
-                        game = self._create_game_from_data(game_data)
+                    if data:
+                        # Only use the first (best) result and cache it
+                        best_match = data[0]
+                        game = self._create_game_from_data(best_match)
                         all_games.append(game)
 
-                        # Cache individual game data with search term
-                        cache_key = self._get_cache_key(f"game_{game_data['id']}")
-                        self._cache_data(cache_key, game_data, search_term=name)
+                        # Cache only the best match with search term
+                        cache_key = self._get_cache_key(f"game_{best_match['id']}")
+                        self._cache_data(cache_key, best_match, search_term=name)
+                        print(f"Using best match: '{game.name}' (ID: {game.igdb_id})")
 
                     # Small delay between individual searches
                     await asyncio.sleep(0.1)
