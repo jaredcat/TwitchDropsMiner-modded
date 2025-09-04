@@ -2521,6 +2521,22 @@ class SettingsPanel:
         thread.start()
         print("IGDB sort thread started")
 
+    def _igdb_client_id_validate(self, entry: PlaceholderEntry) -> bool:
+        """Validate IGDB Client ID input."""
+        client_id = entry.get().strip()
+        entry.replace(client_id)
+        self._settings.igdb_client_id = client_id
+        self._update_igdb_button_states()
+        return True
+
+    def _igdb_access_token_validate(self, entry: PlaceholderEntry) -> bool:
+        """Validate IGDB Access Token input."""
+        access_token = entry.get().strip()
+        entry.replace(access_token)
+        self._settings.igdb_access_token = access_token
+        self._update_igdb_button_states()
+        return True
+
     def _restore_igdb_buttons(self):
         """Restore IGDB sorting buttons to their normal state (called from main thread)."""
         try:
