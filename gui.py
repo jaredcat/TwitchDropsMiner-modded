@@ -2409,13 +2409,11 @@ class SettingsPanel:
             print(f"Manager save failed: {e}")
 
         # Fallback: queue update for GUI main thread to apply in _poll loop
-        import logging
-        logger = logging.getLogger("TwitchDrops")
+        # Avoid using logger here; GUI log handler is not thread-safe
         try:
             self._manager._pending_priority_update = sorted_priority
-            logger.info("Queued priority list update for GUI thread")
-        except Exception as e:
-            logger.error(f"Failed to queue GUI update: {e}")
+        except Exception:
+            pass
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
