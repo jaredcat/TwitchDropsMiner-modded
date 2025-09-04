@@ -76,12 +76,12 @@ class PlaceholderEntry(ttk.Entry):
         placeholder: str,
         prefill: str = '',
         placeholdercolor: str = "grey60",
-        is_password: bool = False,
+        hidden: bool = False,
         **kwargs: Any,
     ):
         super().__init__(master, *args, **kwargs)
         self._prefill: str = prefill
-        self._show: str = '•' if is_password else kwargs.get("show", '')
+        self._show: str = '•' if hidden else kwargs.get("show", '')
         self._text_color: str = kwargs.get("foreground", '')
         self._ph_color: str = placeholdercolor
         self._ph_text: str = placeholder
@@ -490,7 +490,7 @@ class LoginForm:
         self._login_entry = PlaceholderEntry(frame, placeholder=_("gui", "login", "username"))
         # self._login_entry.grid(column=0, row=1, columnspan=2)
         self._pass_entry = PlaceholderEntry(
-            frame, placeholder=_("gui", "login", "password"), is_password=True
+            frame, placeholder=_("gui", "login", "password"), hidden=True
         )
         # self._pass_entry.grid(column=0, row=2, columnspan=2)
         self._token_entry = PlaceholderEntry(frame, placeholder=_("gui", "login", "twofa_code"))
@@ -1660,14 +1660,14 @@ class SettingsPanel:
             width=37,
             textvariable=self._vars["steam_api_key"],
             placeholder=_("gui", "settings", "general", "steam_api", "api_key_placeholder"),
-            is_password=True
+            hidden=True
         )
         self._steam_api_key.config(
             validate="focusout",
             validatecommand=partial(self._steam_api_key_validate, self._steam_api_key)
         )
         self._steam_api_key.grid(column=0, row=1)
-        # Steam ID frame
+# Steam ID frame
         steam_id_frame = ttk.Frame(center_frame2)
         steam_id_frame.grid(column=0, row=5)
         ttk.Label(steam_id_frame, text=_("gui", "settings", "general", "steam_api", "id")).grid(column=0, row=0)
@@ -1676,6 +1676,7 @@ class SettingsPanel:
             width=37,
             textvariable=self._vars["steam_id"],
             placeholder=_("gui", "settings", "general", "steam_api", "id_placeholder"),
+            hidden=True
         )
         self._steam_id.config(
             validate="focusout",
@@ -2276,7 +2277,6 @@ class SettingsPanel:
             print("Steam API key or Steam ID missing")
             return
 
-        steam_client = None
         try:
             from steam_api import SteamAPIClient, SteamAPIError
 
@@ -2288,57 +2288,56 @@ class SettingsPanel:
 
             print(f"Starting Steam sort by {sort_type} for {len(current_priority)} games")
 
-            # Create Steam API client
-            steam_client = SteamAPIClient(self._settings.steam_api_key)
-
             # Use the user-provided Steam ID
             steam_id = self._settings.steam_id.strip()
 
-            # Get user's games data
-            print(f"Fetching Steam data for user {steam_id}")
-            games_data = await steam_client.get_user_games_data(steam_id)
-            print(f"Retrieved {len(games_data)} games from Steam")
+            # Use context manager for proper resource cleanup
+            async with SteamAPIClient(self._settings.steam_api_key) as steam_client:
+                # Get user's games data
+                print(f"Fetching Steam data for user {steam_id}")
+                games_data = await steam_client.get_user_games_data(steam_id)
+                print(f"Retrieved {len(games_data)} games from Steam")
 
-            # Create a mapping of game names to Steam data
-            steam_games_map = {game.name.lower(): game for game in games_data}
+                # Create a mapping of game names to Steam data
+                steam_games_map = {game.name.lower(): game for game in games_data}
 
-            # Sort the priority list based on Steam data
-            def get_sort_key(game_name: str):
-                steam_game = steam_games_map.get(game_name.lower())
-                if not steam_game:
-                    return (0, game_name)  # Games not found in Steam go to end
+                # Sort the priority list based on Steam data
+                def get_sort_key(game_name: str):
+                    steam_game = steam_games_map.get(game_name.lower())
+                    if not steam_game:
+                        return (0, game_name)  # Games not found in Steam go to end
 
-                if sort_type == "playtime":
-                    return (-steam_game.playtime_forever, game_name)
-                elif sort_type == "release_date":
-                    # Convert date string to sortable format
-                    if steam_game.release_date:
-                        try:
-                            from datetime import datetime
-                            date_obj = datetime.strptime(steam_game.release_date, "%d %b, %Y")
-                            return (-date_obj.timestamp(), game_name)
-                        except ValueError:
-                            return (0, game_name)
-                    return (0, game_name)
-                elif sort_type == "rating":
-                    rating = steam_game.rating if steam_game.rating else 0
-                    return (-rating, game_name)
-                else:
-                    return (0, game_name)
+                    if sort_type == "playtime":
+                        return (-steam_game.playtime_forever, game_name)
+                    elif sort_type == "release_date":
+                        # Convert date string to sortable format
+                        if steam_game.release_date:
+                            try:
+                                from datetime import datetime
+                                date_obj = datetime.strptime(steam_game.release_date, "%d %b, %Y")
+                                return (-date_obj.timestamp(), game_name)
+                            except ValueError:
+                                return (0, game_name)
+                        return (0, game_name)
+                    elif sort_type == "rating":
+                        rating = steam_game.rating if steam_game.rating else 0
+                        return (-rating, game_name)
+                    else:
+                        return (0, game_name)
 
-            # Sort the priority list
-            sorted_priority = sorted(current_priority, key=get_sort_key)
-            print(f"Sorted priority list: {sorted_priority}")
+                # Sort the priority list
+                sorted_priority = sorted(current_priority, key=get_sort_key)
+                print(f"Sorted priority list: {sorted_priority}")
 
-            # Update the settings and GUI
-            self._settings.priority = sorted_priority
-            self._settings.alter()
+                # Update the settings and GUI
+                self._settings.priority = sorted_priority
+                self._settings.alter()
 
-            # Update the GUI listbox
-            self._priority_list.delete(0, "end")
-            self._priority_list.insert("end", *sorted_priority)
+                # Update the GUI listbox
+                self._priority_list.delete(0, "end")
+                self._priority_list.insert("end", *sorted_priority)
 
-            print(f"Successfully sorted by {sort_type}")
+                print(f"Successfully sorted by {sort_type}")
 
         except ImportError as e:
             print(f"Steam API module not available: {e}")
@@ -2346,11 +2345,6 @@ class SettingsPanel:
             print(f"Steam sorting error: {e}")
             import traceback
             traceback.print_exc()
-        finally:
-            # Always close the client to prevent resource warnings
-            if steam_client:
-                await steam_client.close()
-                print("Steam client closed")
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""

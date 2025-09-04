@@ -56,13 +56,25 @@ class SteamAPIClient:
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            # Create a connector with proper limits to avoid resource warnings
+            connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
+            self._session = aiohttp.ClientSession(connector=connector)
         return self._session
 
     async def close(self):
         """Close the aiohttp session."""
         if self._session and not self._session.closed:
             await self._session.close()
+            # Wait a moment for the session to fully close
+            await asyncio.sleep(0.1)
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()
 
     def _load_persistent_cache(self):
         """Load Steam data cache from steam_data.json."""
@@ -180,7 +192,7 @@ class SteamAPIClient:
 
         try:
             data = await self._make_request(url, params)
-            print(f"Received response: {data}")
+            # Don't print the full response as it may contain Unicode characters that cause encoding issues
 
             games = []
             response_data = data.get("response", {})
