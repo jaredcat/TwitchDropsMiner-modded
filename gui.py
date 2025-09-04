@@ -1779,7 +1779,7 @@ class SettingsPanel:
             text="▲",
             style="Large.TButton",
             command=partial(self.priority_move, True),
-        ).grid(column=2, row=2, sticky="ns")
+        ).grid(column=1, row=2, sticky="ns")
         # Don't give weight to row 1 (Steam buttons row) - keep it minimal
         priority_frame.rowconfigure(1, weight=0)
         ttk.Button(
@@ -2413,56 +2413,10 @@ class SettingsPanel:
         except Exception as e:
             print(f"Manager save failed: {e}")
 
-        # Update GUI safely using a polling approach
-        def update_gui():
-            try:
-                if hasattr(self, '_pending_priority_update'):
-                    print("Updating GUI list...")
-                    self._priority_list.delete(0, "end")
-                    self._priority_list.insert("end", *self._pending_priority_update)
-                    print(f"GUI updated with {len(self._pending_priority_update)} games")
-                    delattr(self, '_pending_priority_update')
-            except Exception as e:
-                print(f"Error updating GUI: {e}")
-                import traceback
-                traceback.print_exc()
-
-        # Try multiple scheduling approaches
-        print("Scheduling GUI update...")
-        update_scheduled = False
-
-        # Method 1: Try after_idle
-        try:
-            self._root.after_idle(update_gui)
-            print("GUI update scheduled via after_idle")
-            update_scheduled = True
-        except RuntimeError as e:
-            print(f"after_idle failed: {e}")
-        except Exception as e:
-            print(f"after_idle error: {e}")
-
-        # Method 2: Try after with delay
-        if not update_scheduled:
-            try:
-                self._root.after(100, update_gui)  # 100ms delay
-                print("GUI update scheduled via after(100)")
-                update_scheduled = True
-            except RuntimeError as e:
-                print(f"after(100) failed: {e}")
-            except Exception as e:
-                print(f"after(100) error: {e}")
-
-        # Method 3: Direct update (risky but might work)
-        if not update_scheduled:
-            print("Direct GUI update attempt...")
-            try:
-                update_gui()
-                update_scheduled = True
-            except Exception as e:
-                print(f"Direct update failed: {e}")
-
-        if not update_scheduled:
-            print("All GUI update methods failed - list updated in settings but not visible")
+        # Since we can't update GUI from background thread, use a flag-based approach
+        # The main GUI poll loop will pick this up
+        print("Setting flag for GUI update on next poll cycle...")
+        self._priority_needs_refresh = True
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
@@ -2915,6 +2869,18 @@ class GUIManager:
         while True:
             try:
                 update()
+
+                # Check if priority list needs refreshing from background sort
+                if hasattr(self.settings, '_priority_needs_refresh') and self.settings._priority_needs_refresh:
+                    try:
+                        print("Refreshing priority list from main GUI thread...")
+                        self.settings._priority_list.delete(0, "end")
+                        self.settings._priority_list.insert("end", *self._twitch.settings.priority)
+                        self.settings._priority_needs_refresh = False
+                        print(f"Priority list refreshed with {len(self._twitch.settings.priority)} games")
+                    except Exception as e:
+                        print(f"Error refreshing priority list: {e}")
+
             except tk.TclError:
                 # root has been destroyed
                 break
