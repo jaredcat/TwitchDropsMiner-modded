@@ -2413,27 +2413,30 @@ class SettingsPanel:
         except Exception as e:
             print(f"Manager save failed: {e}")
 
-        # Since we can't update GUI from background thread, use a flag-based approach
-        # The main GUI poll loop will pick this up
+        # Directly update GUI using the manager's root
         import logging
         logger = logging.getLogger("TwitchDrops")
-        logger.info("Setting flag for GUI update on next poll cycle...")
-        print("Setting flag for GUI update on next poll cycle...")
+        logger.info("Attempting direct GUI update using root.after...")
+
+        def safe_gui_update():
+            try:
+                logger.info("Executing safe GUI update...")
+                self._priority_list.delete(0, "end")
+                self._priority_list.insert("end", *sorted_priority)
+                logger.info(f"GUI updated successfully with {len(sorted_priority)} games")
+            except Exception as e:
+                logger.error(f"Safe GUI update failed: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
 
         try:
-            self._priority_needs_refresh = True
-            logger.info("Flag set on SettingsPanel successfully")
+            # Use the root's after method to schedule on main thread
+            self._manager._root.after(0, safe_gui_update)
+            logger.info("GUI update scheduled successfully using root.after")
         except Exception as e:
-            logger.error(f"Failed to set flag on SettingsPanel: {e}")
-
-        try:
-            # Also set flag on manager.settings so the GUI poll loop can find it
-            self._manager.settings._priority_needs_refresh = True
-            logger.info("Flag set on Manager.settings successfully")
-        except Exception as e:
-            logger.error(f"Failed to set flag on Manager.settings: {e}")
-
-        logger.info(f"Final flag states - SettingsPanel: {getattr(self, '_priority_needs_refresh', 'NOT_SET')}, Manager.settings: {getattr(self._manager.settings, '_priority_needs_refresh', 'NOT_SET')}")
+            logger.error(f"Failed to schedule GUI update: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
@@ -2895,30 +2898,6 @@ class GUIManager:
             try:
                 update()
 
-                # Check if priority list needs refreshing from background sort
-                # Debug: Check flag periodically
-                if hasattr(self.settings, '_priority_needs_refresh'):
-                    if self.settings._priority_needs_refresh:
-                        import logging
-                        logger = logging.getLogger("TwitchDrops")
-                        logger.info("Flag detected in GUI poll loop - starting refresh...")
-
-                if hasattr(self.settings, '_priority_needs_refresh') and self.settings._priority_needs_refresh:
-                    try:
-                        import logging
-                        logger = logging.getLogger("TwitchDrops")
-                        logger.info("Refreshing priority list from main GUI thread...")
-                        print("Refreshing priority list from main GUI thread...")
-                        self.settings._priority_list.delete(0, "end")
-                        self.settings._priority_list.insert("end", *self._twitch.settings.priority)
-                        self.settings._priority_needs_refresh = False
-                        logger.info(f"Priority list refreshed with {len(self._twitch.settings.priority)} games")
-                        print(f"Priority list refreshed with {len(self._twitch.settings.priority)} games")
-                    except Exception as e:
-                        import logging
-                        logger = logging.getLogger("TwitchDrops")
-                        logger.error(f"Error refreshing priority list: {e}")
-                        print(f"Error refreshing priority list: {e}")
 
             except tk.TclError:
                 # root has been destroyed
