@@ -1673,10 +1673,14 @@ class SettingsPanel:
 
         # Add drag and drop functionality with visual feedback
         self._drag_data = {"items": [], "indices": [], "dragging": False}
+        self._last_click_index = None  # Track last click for range selection
         self._priority_list.bind("<Button-1>", self._on_priority_drag_start)
         self._priority_list.bind("<B1-Motion>", self._on_priority_drag_motion)
         self._priority_list.bind("<ButtonRelease-1>", self._on_priority_drag_release)
         self._priority_list.bind("<Leave>", self._on_priority_drag_leave)
+
+        # Explicitly handle Shift+click for range selection
+        self._priority_list.bind("<Shift-Button-1>", self._on_priority_shift_click)
 
         # Add a label for drag feedback (initially hidden)
         self._drag_feedback_label = ttk.Label(priority_frame, text="",
@@ -1979,6 +1983,10 @@ class SettingsPanel:
         widget = event.widget
         clicked_index = widget.nearest(event.y)
 
+        # Don't interfere with Shift+click or Ctrl+click - let tkinter handle those
+        if event.state & 0x1 or event.state & 0x4:  # Shift or Ctrl
+            return
+
         if clicked_index < widget.size():
             # Get current selection
             current_selection = widget.curselection()
@@ -1989,6 +1997,9 @@ class SettingsPanel:
                 widget.selection_set(clicked_index)
                 current_selection = (clicked_index,)
 
+            # Track this as the last normal click
+            self._last_click_index = clicked_index
+
             # Store drag data for all selected items
             self._drag_data["indices"] = list(current_selection)
             self._drag_data["items"] = [widget.get(i) for i in current_selection]
@@ -1997,11 +2008,32 @@ class SettingsPanel:
             # Configure drag source appearance
             widget.configure(cursor="hand2")
 
+    def _on_priority_shift_click(self, event):
+        """Handle Shift+click for range selection."""
+        widget = event.widget
+        clicked_index = widget.nearest(event.y)
+
+        if clicked_index < widget.size():
+            if self._last_click_index is not None:
+                # Range select from last normal click to current click
+                start_idx = min(self._last_click_index, clicked_index)
+                end_idx = max(self._last_click_index, clicked_index)
+
+                # Clear and set range selection
+                widget.selection_clear(0, "end")
+                for i in range(start_idx, end_idx + 1):
+                    widget.selection_set(i)
+            else:
+                # No previous click, just select clicked item
+                widget.selection_set(clicked_index)
+                self._last_click_index = clicked_index
+
     def _on_priority_drag_motion(self, event):
         """Handle drag motion - provide rich visual feedback."""
         widget = event.widget
         current_index = widget.nearest(event.y)
 
+        # Only handle motion if we have drag data (no modifier keys were pressed during start)
         if self._drag_data["items"]:
             # Mark that we're actively dragging
             if not self._drag_data["dragging"]:
