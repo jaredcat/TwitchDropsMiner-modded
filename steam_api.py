@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 import aiohttp
 from yarl import URL
 
-from constants import JsonType
+from constants import JsonType, STEAM_CACHE_DB
 from utils import json_load, json_save
 from pathlib import Path
 
@@ -40,8 +40,8 @@ class SteamAPIClient:
 
     BASE_URL = "https://api.steampowered.com"
     STORE_URL = "https://store.steampowered.com/api"
-    CACHE_DURATION = timedelta(days=30)  # Cache Steam data for 90 days
-    STEAM_CACHE_FILE = Path("steam_data.json")
+    CACHE_DURATION = timedelta(days=30)  # Cache Steam data for 30 days
+    STEAM_CACHE_FILE = STEAM_CACHE_DB
 
     def __init__(self, api_key: str):
         print(f"Initializing SteamAPIClient with API key: {api_key[:8]}...")

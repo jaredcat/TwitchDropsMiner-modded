@@ -2363,7 +2363,8 @@ class SettingsPanel:
         steam_data = {}
         try:
             from utils import json_load
-            steam_data = json_load("steam_data.json", {})
+            from constants import STEAM_CACHE_DB
+            steam_data = json_load(STEAM_CACHE_DB, {})
             print(f"Loaded Steam data with {len(steam_data)} cache entries")
         except Exception as e:
             print(f"Failed to load Steam data: {e}")
@@ -2422,7 +2423,8 @@ class SettingsPanel:
         steam_data = {}
         try:
             from utils import json_load
-            steam_data = json_load("steam_data.json", {})
+            from constants import STEAM_CACHE_DB
+            steam_data = json_load(STEAM_CACHE_DB, {})
         except Exception:
             # If no Steam data, fall back to alphabetical
             sorted_priority = sorted(current_priority, key=str.lower)
