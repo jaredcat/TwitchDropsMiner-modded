@@ -1786,16 +1786,16 @@ class SettingsPanel:
         priority_games = set(self._settings.priority)
         exclude_games = set(self._settings.exclude)
 
-        # For exclusion dropdown, exclude games that are in priority list
-        exclude_options = [game for game in games_list if game not in priority_games]
+        # For exclusion dropdown, exclude games that are in priority list OR already in exclusion list
+        exclude_options = [game for game in games_list if game not in priority_games and game not in exclude_games]
         self._exclude_entry.config(values=exclude_options)
 
-        # For priority dropdown, exclude games that are in exclusion list
-        priority_options = [game for game in games_list if game not in exclude_games]
+        # For priority dropdown, exclude games that are in exclusion list OR already in priority list
+        priority_options = [game for game in games_list if game not in exclude_games and game not in priority_games]
         self._priority_entry.config(values=priority_options)
 
     def _update_dropdown_options(self) -> None:
-        """Update dropdown options to exclude games that are in the other list."""
+        """Update dropdown options to exclude games that are in the other list or already in their own list."""
         # Get current dropdown values
         current_exclude_values = list(self._exclude_entry.cget("values"))
         current_priority_values = list(self._priority_entry.cget("values"))
@@ -1804,16 +1804,16 @@ class SettingsPanel:
         all_games = sorted(set(current_exclude_values + current_priority_values +
                              list(self._settings.priority) + list(self._settings.exclude)))
 
-        # Filter out games that are in the other list
+        # Filter out games that are in the other list or already in their own list
         priority_games = set(self._settings.priority)
         exclude_games = set(self._settings.exclude)
 
-        # For exclusion dropdown, exclude games that are in priority list
-        exclude_options = [game for game in all_games if game not in priority_games]
+        # For exclusion dropdown, exclude games that are in priority list OR already in exclusion list
+        exclude_options = [game for game in all_games if game not in priority_games and game not in exclude_games]
         self._exclude_entry.config(values=exclude_options)
 
-        # For priority dropdown, exclude games that are in exclusion list
-        priority_options = [game for game in all_games if game not in exclude_games]
+        # For priority dropdown, exclude games that are in exclusion list OR already in priority list
+        priority_options = [game for game in all_games if game not in exclude_games and game not in priority_games]
         self._priority_entry.config(values=priority_options)
 
     def priorities(self) -> dict[str, int]:
@@ -2121,10 +2121,25 @@ class GUIManager:
         # Use 80% of screen height but ensure it's at least the minimum required height
         dynamic_height = max(min_height, int(screen_height * 0.8))
 
-        # If no saved window position, set default size with dynamic height
+        # Apply dynamic height adjustment - either new window or expand existing window height
         if not self._twitch.settings.window_position:
+            # New window - set default size with dynamic height
             root.geometry(f"{min_width}x{dynamic_height}")
             self._twitch.settings.window_position = root.geometry()
+        else:
+            # Existing window - parse current geometry and apply dynamic height if beneficial
+            current_geom = self._twitch.settings.window_position
+            if 'x' in current_geom and '+' in current_geom:
+                # Parse geometry string like "940x690+3203+345"
+                size_part = current_geom.split('+')[0]  # "940x690"
+                position_part = current_geom[len(size_part):]  # "+3203+345"
+                if 'x' in size_part:
+                    current_width, current_height = map(int, size_part.split('x'))
+                    # Use dynamic height if it's larger than current height
+                    new_height = max(current_height, dynamic_height)
+                    new_geometry = f"{current_width}x{new_height}{position_part}"
+                    root.geometry(new_geometry)
+                    self._twitch.settings.window_position = new_geometry
         # register logging handler
         self._handler = _TKOutputHandler(self)
         self._handler.setFormatter(OUTPUT_FORMATTER)
