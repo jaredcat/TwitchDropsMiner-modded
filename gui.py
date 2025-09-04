@@ -2351,17 +2351,22 @@ class SettingsPanel:
 
     async def _simple_sort_by_release_date(self):
         """Sort by release date using cached Steam data."""
-        # Do not log here; background thread logging can break Tk
+        print("Starting release date sort...")
         current_priority = list(self._settings.priority)
         if not current_priority:
+            print("No games in priority list")
             return
+
+        print(f"Sorting {len(current_priority)} games by release date")
 
         # Load Steam data from cache
         steam_data = {}
         try:
             from utils import json_load
             steam_data = json_load("steam_data.json", {})
-        except Exception:
+            print(f"Loaded Steam data with {len(steam_data)} cache entries")
+        except Exception as e:
+            print(f"Failed to load Steam data: {e}")
             # If no Steam data, fall back to alphabetical
             sorted_priority = sorted(current_priority, key=str.lower)
             self._update_priority_list_safely(sorted_priority)
@@ -2379,6 +2384,9 @@ class SettingsPanel:
                             release_date = game_data.get("release_date")
                             if release_date:
                                 game_release_dates[game_name.lower()] = release_date
+                                print(f"Found release date for {game_name}: {release_date}")
+
+        print(f"Found release dates for {len(game_release_dates)} games")
 
         # Sort by release date, with games without dates at the end
         def get_sort_key(game_name):
@@ -2398,6 +2406,7 @@ class SettingsPanel:
                 return (1, game_name.lower())  # Invalid date = end of list
 
         sorted_priority = sorted(current_priority, key=get_sort_key)
+        print(f"Sorted priority list: {sorted_priority[:5]}...")  # Show first 5 games
 
         # Persist and request GUI update
         self._update_priority_list_safely(sorted_priority)
