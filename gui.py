@@ -79,19 +79,40 @@ class PlaceholderEntry(ttk.Entry):
         is_password: bool = False,
         **kwargs: Any,
     ):
+        # Store textvariable if provided
+        self._textvariable = kwargs.get('textvariable')
+        if self._textvariable:
+            # Temporarily remove textvariable to avoid conflicts
+            del kwargs['textvariable']
+
         super().__init__(master, *args, **kwargs)
         self._prefill: str = prefill
         self._show: str = '•' if is_password else kwargs.get("show", '')
         self._text_color: str = kwargs.get("foreground", '')
         self._ph_color: str = placeholdercolor
         self._ph_text: str = placeholder
+        self._is_password: bool = is_password
+
+        # Set up textvariable after initialization
+        if self._textvariable:
+            self.config(textvariable=self._textvariable)
+            # If there's already a value, don't show placeholder
+            if self._textvariable.get():
+                self._ph = False
+            else:
+                self._ph = True
+        else:
+            self._ph = False
+
         self.bind("<FocusIn>", self._focus_in)
         self.bind("<FocusOut>", self._focus_out)
         if isinstance(self, ttk.Combobox):
             # only bind this for comboboxes
             self.bind("<<ComboboxSelected>>", self._combobox_select)
-        self._ph: bool = False
-        self._insert_placeholder()
+
+        # Only insert placeholder if no textvariable or it's empty
+        if not self._textvariable or not self._textvariable.get():
+            self._insert_placeholder()
 
     def _insert_placeholder(self) -> None:
         """
@@ -118,7 +139,9 @@ class PlaceholderEntry(ttk.Entry):
         self._remove_placeholder()
 
     def _focus_out(self, event: tk.Event[PlaceholderEntry]) -> None:
-        self._insert_placeholder()
+        # Only show placeholder if the field is empty
+        if not self.get():
+            self._insert_placeholder()
 
     def _combobox_select(self, event: tk.Event[PlaceholderEntry]):
         # combobox clears and inserts the selected value internally, bypassing the insert method.
@@ -156,6 +179,8 @@ class PlaceholderEntry(ttk.Entry):
     def get(self) -> str:
         if self._ph:
             return ''
+        if self._textvariable:
+            return self._textvariable.get()
         return super().get()
 
     def insert(self, index: tk._EntryIndex, content: str) -> None:
@@ -1658,11 +1683,10 @@ class SettingsPanel:
         self._igdb_client_id = PlaceholderEntry(
             igdb_api_frame,
             width=37,
+            textvariable=self._vars["igdb_client_id"],
             placeholder=_("gui", "settings", "general", "igdb_api", "client_id_placeholder"),
             is_password=True
         )
-        # Set the textvariable after creation to avoid showing the value
-        self._igdb_client_id.config(textvariable=self._vars["igdb_client_id"])
         self._igdb_client_id.config(
             validate="focusout",
             validatecommand=partial(self._igdb_client_id_validate, self._igdb_client_id)
@@ -1675,11 +1699,10 @@ class SettingsPanel:
         self._igdb_client_secret = PlaceholderEntry(
             igdb_token_frame,
             width=37,
+            textvariable=self._vars["igdb_client_secret"],
             placeholder=_("gui", "settings", "general", "igdb_api", "client_secret_placeholder"),
             is_password=True
         )
-        # Set the textvariable after creation to avoid showing the value
-        self._igdb_client_secret.config(textvariable=self._vars["igdb_client_secret"])
         self._igdb_client_secret.config(
             validate="focusout",
             validatecommand=partial(self._igdb_client_secret_validate, self._igdb_client_secret)
