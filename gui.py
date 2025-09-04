@@ -1779,7 +1779,7 @@ class SettingsPanel:
             text="▲",
             style="Large.TButton",
             command=partial(self.priority_move, True),
-        ).grid(column=2, row=0, sticky="ns")
+        ).grid(column=2, row=2, sticky="ns")
         # Don't give weight to row 1 (Steam buttons row) - keep it minimal
         priority_frame.rowconfigure(1, weight=0)
         ttk.Button(
@@ -1788,11 +1788,11 @@ class SettingsPanel:
             text="▼",
             style="Large.TButton",
             command=partial(self.priority_move, False),
-        ).grid(column=1, row=2, sticky="ns")
+        ).grid(column=1, row=3, sticky="ns")
         priority_frame.rowconfigure(2, weight=1)
         ttk.Button(
             priority_frame, text="❌", command=self.priority_delete, width=2, style="Large.TButton"
-        ).grid(column=1, row=3, sticky="ns")
+        ).grid(column=1, row=4, sticky="ns")
         priority_frame.rowconfigure(3, weight=1)
         # Exclude section - with width constraint
         exclude_frame = ttk.LabelFrame(
@@ -2395,38 +2395,74 @@ class SettingsPanel:
     def _update_priority_list_safely(self, sorted_priority: list[str]):
         """Safely update the priority list and GUI from any thread."""
         print(f"_update_priority_list_safely called with {len(sorted_priority)} games")
-        
-        # Update the settings
+
+        # Store the sorted list for the GUI thread to pick up
+        self._pending_priority_update = sorted_priority
+
+        # Update the settings and save immediately
         self._settings.priority = sorted_priority
         self._settings.alter()
-        print("Settings updated successfully")
+        # Force save to file
+        self._settings.save()
+        print("Settings updated and saved successfully")
 
-        # Update GUI safely
+        # Also trigger the GUI manager's save to ensure persistence
+        try:
+            self._manager.save(force=True)
+            print("Manager save completed")
+        except Exception as e:
+            print(f"Manager save failed: {e}")
+
+        # Update GUI safely using a polling approach
         def update_gui():
             try:
-                print("Updating GUI list...")
-                self._priority_list.delete(0, "end")
-                self._priority_list.insert("end", *sorted_priority)
-                print(f"GUI updated with {len(sorted_priority)} games")
+                if hasattr(self, '_pending_priority_update'):
+                    print("Updating GUI list...")
+                    self._priority_list.delete(0, "end")
+                    self._priority_list.insert("end", *self._pending_priority_update)
+                    print(f"GUI updated with {len(self._pending_priority_update)} games")
+                    delattr(self, '_pending_priority_update')
             except Exception as e:
                 print(f"Error updating GUI: {e}")
                 import traceback
                 traceback.print_exc()
 
-        # Try to schedule on main thread, with fallback
+        # Try multiple scheduling approaches
         print("Scheduling GUI update...")
+        update_scheduled = False
+
+        # Method 1: Try after_idle
         try:
-            if hasattr(self._root, 'after_idle'):
-                self._root.after_idle(update_gui)
-                print("GUI update scheduled successfully")
-            else:
-                print("Warning: Could not schedule GUI update - after_idle not available")
+            self._root.after_idle(update_gui)
+            print("GUI update scheduled via after_idle")
+            update_scheduled = True
         except RuntimeError as e:
-            print(f"Warning: Could not schedule GUI update - {e}")
+            print(f"after_idle failed: {e}")
         except Exception as e:
-            print(f"Unexpected error scheduling GUI update: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"after_idle error: {e}")
+
+        # Method 2: Try after with delay
+        if not update_scheduled:
+            try:
+                self._root.after(100, update_gui)  # 100ms delay
+                print("GUI update scheduled via after(100)")
+                update_scheduled = True
+            except RuntimeError as e:
+                print(f"after(100) failed: {e}")
+            except Exception as e:
+                print(f"after(100) error: {e}")
+
+        # Method 3: Direct update (risky but might work)
+        if not update_scheduled:
+            print("Direct GUI update attempt...")
+            try:
+                update_gui()
+                update_scheduled = True
+            except Exception as e:
+                print(f"Direct update failed: {e}")
+
+        if not update_scheduled:
+            print("All GUI update methods failed - list updated in settings but not visible")
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
