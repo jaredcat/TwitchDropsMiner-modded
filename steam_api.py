@@ -44,6 +44,7 @@ class SteamAPIClient:
     STEAM_CACHE_FILE = Path("steam_data.json")
 
     def __init__(self, api_key: str):
+        print(f"Initializing SteamAPIClient with API key: {api_key[:8]}...")
         self.api_key = api_key
         self._session: Optional[aiohttp.ClientSession] = None
         self._memory_cache: Dict[str, Any] = {}
@@ -80,18 +81,18 @@ class SteamAPIClient:
         """Load Steam data cache from steam_data.json."""
         try:
             self._persistent_cache = json_load(self.STEAM_CACHE_FILE, {})
-            logger.debug(f"Loaded {len(self._persistent_cache)} Steam data entries from cache")
+            print(f"Loaded {len(self._persistent_cache)} Steam data entries from cache")
         except Exception as e:
-            logger.warning(f"Failed to load Steam cache: {e}")
+            print(f"Failed to load Steam cache: {e}")
             self._persistent_cache = {}
 
     def _save_persistent_cache(self):
         """Save Steam data cache to steam_data.json."""
         try:
             json_save(self.STEAM_CACHE_FILE, self._persistent_cache, sort=True)
-            logger.debug(f"Saved {len(self._persistent_cache)} Steam data entries to cache")
+            print(f"Saved {len(self._persistent_cache)} Steam data entries to cache")
         except Exception as e:
-            logger.warning(f"Failed to save Steam cache: {e}")
+            print(f"Failed to save Steam cache: {e}")
 
     def _get_cache_key(self, steam_id: str, data_type: str) -> str:
         """Generate cache key for Steam data."""
@@ -189,6 +190,7 @@ class SteamAPIClient:
         print(f"Requesting owned games for Steam ID: {steam_id}")
         print(f"API URL: {url}")
         print(f"API Key: {self.api_key[:8]}...")
+        print("Making Steam API request...")
 
         try:
             data = await self._make_request(url, params)

@@ -76,12 +76,12 @@ class PlaceholderEntry(ttk.Entry):
         placeholder: str,
         prefill: str = '',
         placeholdercolor: str = "grey60",
-        hidden: bool = False,
+        is_password: bool = False,
         **kwargs: Any,
     ):
         super().__init__(master, *args, **kwargs)
         self._prefill: str = prefill
-        self._show: str = '•' if hidden else kwargs.get("show", '')
+        self._show: str = '•' if is_password else kwargs.get("show", '')
         self._text_color: str = kwargs.get("foreground", '')
         self._ph_color: str = placeholdercolor
         self._ph_text: str = placeholder
@@ -490,7 +490,7 @@ class LoginForm:
         self._login_entry = PlaceholderEntry(frame, placeholder=_("gui", "login", "username"))
         # self._login_entry.grid(column=0, row=1, columnspan=2)
         self._pass_entry = PlaceholderEntry(
-            frame, placeholder=_("gui", "login", "password"), hidden=True
+            frame, placeholder=_("gui", "login", "password"), is_password=True
         )
         # self._pass_entry.grid(column=0, row=2, columnspan=2)
         self._token_entry = PlaceholderEntry(frame, placeholder=_("gui", "login", "twofa_code"))
@@ -1660,7 +1660,7 @@ class SettingsPanel:
             width=37,
             textvariable=self._vars["steam_api_key"],
             placeholder=_("gui", "settings", "general", "steam_api", "api_key_placeholder"),
-            hidden=True
+            is_password=True
         )
         self._steam_api_key.config(
             validate="focusout",
@@ -1676,7 +1676,7 @@ class SettingsPanel:
             width=37,
             textvariable=self._vars["steam_id"],
             placeholder=_("gui", "settings", "general", "steam_api", "id_placeholder"),
-            hidden=True
+            is_password=True
         )
         self._steam_id.config(
             validate="focusout",
@@ -1708,30 +1708,35 @@ class SettingsPanel:
         # Steam sorting buttons frame
         steam_sorting_frame = ttk.Frame(priority_frame)
         steam_sorting_frame.grid(column=0, row=1, columnspan=2, sticky="ew")
+        # Configure row to be minimal height (no weight)
+        steam_sorting_frame.rowconfigure(0, weight=0)
 
         self._steam_sort_playtime = ttk.Button(
             steam_sorting_frame,
-            text=_("gui", "settings", "sorting", "playtime"),
+            text="⏱️",
             command=self._steam_sort_by_playtime,
-            state="disabled"
+            state="disabled",
+            width=3
         )
-        self._steam_sort_playtime.grid(column=0, row=0, padx=1)
+        self._steam_sort_playtime.grid(column=0, row=0, padx=1, pady=1)
 
         self._steam_sort_release = ttk.Button(
             steam_sorting_frame,
-            text=_("gui", "settings", "sorting", "release_date"),
+            text="📅",
             command=self._steam_sort_by_release_date,
-            state="disabled"
+            state="disabled",
+            width=3
         )
-        self._steam_sort_release.grid(column=1, row=0, padx=1)
+        self._steam_sort_release.grid(column=1, row=0, padx=1, pady=1)
 
         self._steam_sort_rating = ttk.Button(
             steam_sorting_frame,
-            text=_("gui", "settings", "sorting", "rating"),
+            text="⭐",
             command=self._steam_sort_by_rating,
-            state="disabled"
+            state="disabled",
+            width=3
         )
-        self._steam_sort_rating.grid(column=2, row=0, padx=1)
+        self._steam_sort_rating.grid(column=2, row=0, padx=1, pady=1)
 
         # Initialize button states after all buttons are created
         self._update_steam_button_states()
@@ -1775,7 +1780,8 @@ class SettingsPanel:
             style="Large.TButton",
             command=partial(self.priority_move, True),
         ).grid(column=1, row=1, sticky="ns")
-        priority_frame.rowconfigure(1, weight=1)
+        # Don't give weight to row 1 (Steam buttons row) - keep it minimal
+        priority_frame.rowconfigure(1, weight=0)
         ttk.Button(
             priority_frame,
             width=2,
@@ -2333,9 +2339,16 @@ class SettingsPanel:
                 self._settings.priority = sorted_priority
                 self._settings.alter()
 
-                # Update the GUI listbox
-                self._priority_list.delete(0, "end")
-                self._priority_list.insert("end", *sorted_priority)
+                # Update the GUI listbox (schedule on main thread)
+                def update_gui():
+                    try:
+                        self._priority_list.delete(0, "end")
+                        self._priority_list.insert("end", *sorted_priority)
+                    except Exception as e:
+                        print(f"Error updating GUI: {e}")
+
+                # Schedule GUI update on main thread
+                self._root.after_idle(update_gui)
 
                 print(f"Successfully sorted by {sort_type}")
 
@@ -2351,6 +2364,8 @@ class SettingsPanel:
         print("=== Steam sort by playtime clicked ===")
         print(f"API Key present: {bool(self._settings.steam_api_key)}")
         print(f"Steam ID present: {bool(self._settings.steam_id)}")
+        print(f"API Key value: {self._settings.steam_api_key[:8]}...")
+        print(f"Steam ID value: {self._settings.steam_id}")
         print(f"Priority list length: {len(self._settings.priority)}")
         self._run_steam_sort("playtime")
 
@@ -2359,6 +2374,8 @@ class SettingsPanel:
         print("=== Steam sort by release date clicked ===")
         print(f"API Key present: {bool(self._settings.steam_api_key)}")
         print(f"Steam ID present: {bool(self._settings.steam_id)}")
+        print(f"API Key value: {self._settings.steam_api_key[:8]}...")
+        print(f"Steam ID value: {self._settings.steam_id}")
         print(f"Priority list length: {len(self._settings.priority)}")
         self._run_steam_sort("release_date")
 
@@ -2367,6 +2384,8 @@ class SettingsPanel:
         print("=== Steam sort by rating clicked ===")
         print(f"API Key present: {bool(self._settings.steam_api_key)}")
         print(f"Steam ID present: {bool(self._settings.steam_id)}")
+        print(f"API Key value: {self._settings.steam_api_key[:8]}...")
+        print(f"Steam ID value: {self._settings.steam_id}")
         print(f"Priority list length: {len(self._settings.priority)}")
         self._run_steam_sort("rating")
 
@@ -2406,10 +2425,17 @@ class SettingsPanel:
                 asyncio.set_event_loop(loop)
                 print("Created new event loop for Steam sort")
 
-                # Run the async function
+                # Run the async function with timeout
                 print("Running steam_sort_games...")
-                loop.run_until_complete(self._steam_sort_games(sort_type))
-                print("Steam sort completed successfully")
+                try:
+                    # Add a timeout to prevent hanging
+                    loop.run_until_complete(asyncio.wait_for(self._steam_sort_games(sort_type), timeout=60))
+                    print("Steam sort completed successfully")
+                except asyncio.TimeoutError:
+                    print("Steam sort timed out after 60 seconds")
+                except Exception as e:
+                    print(f"Steam sort failed: {e}")
+                    raise
 
             except Exception as e:
                 print(f"Steam sort error: {e}")
