@@ -2398,15 +2398,11 @@ class SettingsPanel:
         self._settings.priority = sorted_priority
         self._settings.alter()
         # Force save to file
-        self._settings.save()
+        self._settings.save(force=True)
         print("Settings updated and saved successfully")
 
         # Also trigger the GUI manager's save to ensure persistence
-        try:
-            self._manager.save(force=True)
-            print("Manager save completed")
-        except Exception as e:
-            print(f"Manager save failed: {e}")
+        # Manager save not needed for settings; it saves image cache
 
         # Fallback: queue update for GUI main thread to apply in _poll loop
         # Avoid using logger here; GUI log handler is not thread-safe
