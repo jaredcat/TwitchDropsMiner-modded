@@ -2918,8 +2918,21 @@ class GUIManager:
         self.tray.update_title(None)
 
     def print(self, message: str):
-        print(f"{datetime.now().strftime('%Y-%m-%d %X')}: {message}")
-        # print to our custom output
+        # Handle Unicode characters that can't be encoded by Windows console
+        try:
+            formatted_message = f"{datetime.now().strftime('%Y-%m-%d %X')}: {message}"
+            print(formatted_message)
+        except UnicodeEncodeError:
+            # Fallback: encode with error handling for problematic characters
+            try:
+                safe_message = message.encode('ascii', 'replace').decode('ascii')
+                formatted_message = f"{datetime.now().strftime('%Y-%m-%d %X')}: {safe_message}"
+                print(formatted_message)
+            except Exception:
+                # Last resort: print without the problematic message
+                print(f"{datetime.now().strftime('%Y-%m-%d %X')}: [Message contains unsupported characters]")
+
+        # print to our custom output (GUI can handle Unicode better)
         self.output.print(message)
 
 
