@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import aiohttp
 from yarl import URL
 
-from constants import JsonType
+from constants import JsonType, CACHE_DB
+from utils import json_load, json_save
 
 logger = logging.getLogger("TwitchDrops")
 
@@ -38,13 +39,17 @@ class SteamAPIClient:
 
     BASE_URL = "https://api.steampowered.com"
     STORE_URL = "https://store.steampowered.com/api"
+    CACHE_DURATION = timedelta(days=7)  # Cache Steam data for 7 days
 
     def __init__(self, api_key: str):
         self.api_key = api_key
         self._session: Optional[aiohttp.ClientSession] = None
-        self._cache: Dict[str, Any] = {}
-        self._cache_timestamps: Dict[str, datetime] = {}
-        self._cache_duration = 3600  # 1 hour cache
+        self._memory_cache: Dict[str, Any] = {}
+        self._memory_cache_timestamps: Dict[str, datetime] = {}
+        self._memory_cache_duration = 3600  # 1 hour memory cache
+
+        # Load persistent cache from mappings.json
+        self._load_persistent_cache()
 
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
@@ -57,30 +62,80 @@ class SteamAPIClient:
         if self._session and not self._session.closed:
             await self._session.close()
 
-    def _is_cache_valid(self, key: str) -> bool:
+    def _load_persistent_cache(self):
+        """Load Steam data cache from mappings.json."""
+        try:
+            cache_data = json_load(CACHE_DB, {})
+            self._persistent_cache = cache_data.get("steam_data", {})
+            logger.debug(f"Loaded {len(self._persistent_cache)} Steam data entries from cache")
+        except Exception as e:
+            logger.warning(f"Failed to load Steam cache: {e}")
+            self._persistent_cache = {}
+
+    def _save_persistent_cache(self):
+        """Save Steam data cache to mappings.json."""
+        try:
+            # Load existing cache data
+            cache_data = json_load(CACHE_DB, {})
+            cache_data["steam_data"] = self._persistent_cache
+            json_save(CACHE_DB, cache_data, sort=True)
+            logger.debug(f"Saved {len(self._persistent_cache)} Steam data entries to cache")
+        except Exception as e:
+            logger.warning(f"Failed to save Steam cache: {e}")
+
+    def _get_cache_key(self, steam_id: str, data_type: str) -> str:
+        """Generate cache key for Steam data."""
+        return f"steam_{steam_id}_{data_type}"
+
+    def _is_cache_valid(self, cache_key: str) -> bool:
         """Check if cached data is still valid."""
-        if key not in self._cache_timestamps:
+        if cache_key not in self._persistent_cache:
             return False
-        age = datetime.now(timezone.utc) - self._cache_timestamps[key]
-        return age.total_seconds() < self._cache_duration
+
+        cache_entry = self._persistent_cache[cache_key]
+        cached_time = datetime.fromisoformat(cache_entry["timestamp"])
+        age = datetime.now(timezone.utc) - cached_time
+        return age < self.CACHE_DURATION
+
+    def _get_cached_data(self, cache_key: str) -> Optional[Any]:
+        """Get cached data if valid."""
+        if self._is_cache_valid(cache_key):
+            logger.debug(f"Using cached Steam data for {cache_key}")
+            return self._persistent_cache[cache_key]["data"]
+        return None
+
+    def _cache_data(self, cache_key: str, data: Any):
+        """Cache data with timestamp."""
+        self._persistent_cache[cache_key] = {
+            "data": data,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        self._save_persistent_cache()
+
+    def _is_memory_cache_valid(self, key: str) -> bool:
+        """Check if memory cached data is still valid."""
+        if key not in self._memory_cache_timestamps:
+            return False
+        age = datetime.now(timezone.utc) - self._memory_cache_timestamps[key]
+        return age.total_seconds() < self._memory_cache_duration
 
     async def _make_request(self, url: str, params: Optional[Dict[str, Any]] = None) -> JsonType:
-        """Make HTTP request with caching."""
+        """Make HTTP request with memory caching."""
         cache_key = f"{url}:{str(params)}"
 
-        # Check cache first
-        if self._is_cache_valid(cache_key):
-            logger.debug(f"Using cached data for {url}")
-            return self._cache[cache_key]
+        # Check memory cache first
+        if self._is_memory_cache_valid(cache_key):
+            logger.debug(f"Using memory cached data for {url}")
+            return self._memory_cache[cache_key]
 
         session = await self.get_session()
         try:
             async with session.get(url, params=params) as response:
                 if response.status == 200:
                     data = await response.json()
-                    # Cache the result
-                    self._cache[cache_key] = data
-                    self._cache_timestamps[cache_key] = datetime.now(timezone.utc)
+                    # Cache the result in memory
+                    self._memory_cache[cache_key] = data
+                    self._memory_cache_timestamps[cache_key] = datetime.now(timezone.utc)
                     return data
                 elif response.status == 403:
                     raise SteamAPIError("Invalid Steam API key or insufficient permissions")
@@ -117,11 +172,22 @@ class SteamAPIClient:
             "include_played_free_games": "1"
         }
 
+        logger.info(f"Requesting owned games for Steam ID: {steam_id}")
+        logger.debug(f"API URL: {url}")
+        logger.debug(f"API Key: {self.api_key[:8]}...")
+
         try:
             data = await self._make_request(url, params)
+            logger.debug(f"Received response: {data}")
+            
             games = []
+            response_data = data.get("response", {})
+            
+            if "games" not in response_data:
+                logger.warning(f"No games found in response: {response_data}")
+                return []
 
-            for game_data in data.get("response", {}).get("games", []):
+            for game_data in response_data.get("games", []):
                 game = SteamGame(
                     appid=game_data["appid"],
                     name=game_data["name"],
@@ -129,6 +195,7 @@ class SteamAPIClient:
                 )
                 games.append(game)
 
+            logger.info(f"Retrieved {len(games)} owned games")
             return games
         except SteamAPIError as e:
             logger.error(f"Failed to get owned games: {e}")
@@ -197,7 +264,28 @@ class SteamAPIClient:
         return enriched_games
 
     async def get_user_games_data(self, steam_id: str) -> List[SteamGame]:
-        """Get complete game data for a user (owned games + details)."""
+        """Get complete game data for a user (owned games + details) with persistent caching."""
+        cache_key = self._get_cache_key(steam_id, "games_data")
+
+        # Check persistent cache first
+        cached_data = self._get_cached_data(cache_key)
+        if cached_data is not None:
+            logger.info(f"Using cached Steam games data for user {steam_id}")
+            # Convert cached data back to SteamGame objects
+            games = []
+            for game_data in cached_data:
+                game = SteamGame(
+                    appid=game_data["appid"],
+                    name=game_data["name"],
+                    playtime_forever=game_data["playtime_forever"],
+                    release_date=game_data.get("release_date"),
+                    rating=game_data.get("rating")
+                )
+                games.append(game)
+            return games
+
+        logger.info(f"Fetching fresh Steam games data for user {steam_id}")
+
         # Get owned games
         owned_games = await self.get_owned_games(steam_id)
         if not owned_games:
@@ -205,7 +293,68 @@ class SteamAPIClient:
 
         # Enrich with additional details
         enriched_games = await self.enrich_games_with_details(owned_games)
+
+        # Cache the results
+        cache_data = []
+        for game in enriched_games:
+            cache_data.append({
+                "appid": game.appid,
+                "name": game.name,
+                "playtime_forever": game.playtime_forever,
+                "release_date": game.release_date,
+                "rating": game.rating
+            })
+
+        self._cache_data(cache_key, cache_data)
+        logger.info(f"Cached Steam games data for user {steam_id}")
+
         return enriched_games
+
+    def clear_steam_cache(self, steam_id: Optional[str] = None):
+        """Clear Steam data cache for a specific user or all users."""
+        if steam_id:
+            # Clear cache for specific user
+            cache_key = self._get_cache_key(steam_id, "games_data")
+            if cache_key in self._persistent_cache:
+                del self._persistent_cache[cache_key]
+                self._save_persistent_cache()
+                logger.info(f"Cleared Steam cache for user {steam_id}")
+        else:
+            # Clear all Steam cache
+            self._persistent_cache.clear()
+            self._save_persistent_cache()
+            logger.info("Cleared all Steam cache data")
+
+    def get_cache_info(self) -> Dict[str, Any]:
+        """Get information about cached Steam data."""
+        now = datetime.now(timezone.utc)
+        cache_info = {
+            "total_entries": len(self._persistent_cache),
+            "users": [],
+            "oldest_entry": None,
+            "newest_entry": None
+        }
+
+        timestamps = []
+        for cache_key, cache_entry in self._persistent_cache.items():
+            if cache_key.startswith("steam_") and cache_key.endswith("_games_data"):
+                steam_id = cache_key.replace("steam_", "").replace("_games_data", "")
+                cached_time = datetime.fromisoformat(cache_entry["timestamp"])
+                age = now - cached_time
+
+                cache_info["users"].append({
+                    "steam_id": steam_id,
+                    "cached_at": cached_time.isoformat(),
+                    "age_days": age.days,
+                    "is_valid": age < self.CACHE_DURATION
+                })
+                timestamps.append(cached_time)
+
+        if timestamps:
+            cache_info["oldest_entry"] = min(timestamps).isoformat()
+            cache_info["newest_entry"] = max(timestamps).isoformat()
+
+        return cache_info
 
     def sort_games_by_playtime(self, games: List[SteamGame], reverse: bool = True) -> List[SteamGame]:
         """Sort games by playtime (highest first by default)."""

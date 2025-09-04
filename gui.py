@@ -2377,35 +2377,46 @@ class SettingsPanel:
         self._run_steam_sort("rating")
 
     def _run_steam_sort(self, sort_type: str):
-        """Run Steam sorting in a way that works with Tkinter."""
+        """Run Steam sorting using the main application's event loop."""
         import asyncio
-        import threading
 
-        def run_async_sort():
-            """Run the async sorting in a separate thread."""
-            print(f"Starting async sort thread for {sort_type}")
+        print(f"Starting Steam sort for {sort_type}")
+
+        try:
+            # Get the current event loop (the main application's loop)
+            loop = asyncio.get_running_loop()
+            print("Using existing event loop")
+
+            # Schedule the coroutine to run on the main event loop
+            task = loop.create_task(self._steam_sort_games(sort_type))
+
+            # Add error handling
+            def handle_task_done(task):
+                try:
+                    result = task.result()
+                    print("Steam sort completed successfully")
+                except Exception as e:
+                    print(f"Steam sort error: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+            task.add_done_callback(handle_task_done)
+            print("Steam sort task scheduled")
+
+        except RuntimeError as e:
+            print(f"Failed to get event loop: {e}")
+            # Fallback: try to create a new event loop
             try:
-                # Create a new event loop for this thread
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                print("Event loop created")
-
-                # Run the async function
-                print("Running steam_sort_games...")
+                print("Created new event loop as fallback")
                 loop.run_until_complete(self._steam_sort_games(sort_type))
-                print("Steam sort completed successfully")
-
-            except Exception as e:
-                print(f"Steam sort error: {e}")
+                print("Steam sort completed successfully (fallback)")
+                loop.close()
+            except Exception as fallback_error:
+                print(f"Fallback also failed: {fallback_error}")
                 import traceback
                 traceback.print_exc()
-            finally:
-                print("Closing event loop")
-                loop.close()
-
-        # Run in a separate thread to avoid blocking the GUI
-        thread = threading.Thread(target=run_async_sort, daemon=True)
-        thread.start()
 
 
 class HelpTab:
