@@ -1991,27 +1991,17 @@ class SettingsPanel:
             # Clear all previous selections and highlights
             widget.selection_clear(0, "end")
 
-            # Highlight the drag source with different color
+            # Highlight only the drag source item
             drag_index = self._drag_data["index"]
             if drag_index is not None and drag_index < widget.size():
                 widget.selection_set(drag_index)
-                # Make the dragged item appear dimmed/different
                 widget.activate(drag_index)
 
-            # Highlight the drop target if it's different from source
+            # Highlight only the current drop target position (not the range)
             if (current_index < widget.size() and
                 current_index != drag_index):
-                # Create visual separator line effect by manipulating selection
-                if current_index > drag_index:
-                    # Dragging down - highlight the line below target
-                    for i in range(drag_index + 1, current_index + 1):
-                        if i < widget.size():
-                            widget.selection_set(i)
-                else:
-                    # Dragging up - highlight the line above target
-                    for i in range(current_index, drag_index):
-                        if i < widget.size():
-                            widget.selection_set(i)
+                # Just highlight the single target position
+                widget.selection_set(current_index)
 
     def _on_priority_drag_release(self, event):
         """Complete drag operation - move the item to new position."""
