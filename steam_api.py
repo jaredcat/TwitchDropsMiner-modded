@@ -113,8 +113,8 @@ class SteamAPIClient:
         params = {
             "key": self.api_key,
             "steamid": steam_id,
-            "include_appinfo": True,
-            "include_played_free_games": True
+            "include_appinfo": "1",
+            "include_played_free_games": "1"
         }
 
         try:
