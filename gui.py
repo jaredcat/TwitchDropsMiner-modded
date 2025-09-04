@@ -1500,8 +1500,7 @@ def proxy_validate(entry: PlaceholderEntry, settings: Settings) -> bool:
 class _SettingsVars(TypedDict):
     tray: IntVar
     proxy: StringVar
-    steam_api_key: StringVar
-    steam_id: StringVar
+    igdb_api_key: StringVar
     dark_theme: IntVar
     autostart: IntVar
     priority_only: IntVar
@@ -1522,8 +1521,8 @@ class SettingsPanel:
         self._settings: Settings = manager._twitch.settings
         self._vars: _SettingsVars = {
             "proxy": StringVar(master, str(self._settings.proxy)),
-            "steam_api_key": StringVar(master, self._settings.steam_api_key),
-            "steam_id": StringVar(master, self._settings.steam_id),
+            "igdb_client_id": StringVar(master, self._settings.igdb_client_id),
+            "igdb_access_token": StringVar(master, self._settings.igdb_access_token),
             "tray": IntVar(master, self._settings.autostart_tray),
             "dark_theme": IntVar(master, self._settings.dark_theme),
             "autostart": IntVar(master, self._settings.autostart),
@@ -1651,42 +1650,42 @@ class SettingsPanel:
         )
         self._proxy.config(validatecommand=partial(proxy_validate, self._proxy, self._settings))
         self._proxy.grid(column=0, row=1)
-        # Steam API key frame
-        steam_api_frame = ttk.Frame(center_frame2)
-        steam_api_frame.grid(column=0, row=4)
-        ttk.Label(steam_api_frame, text=_("gui", "settings", "general", "steam_api", "api_key")).grid(column=0, row=0)
-        self._steam_api_key = PlaceholderEntry(
-            steam_api_frame,
+        # IGDB API key frame
+        igdb_api_frame = ttk.Frame(center_frame2)
+        igdb_api_frame.grid(column=0, row=4)
+        ttk.Label(igdb_api_frame, text="IGDB Client ID:").grid(column=0, row=0)
+        self._igdb_client_id = PlaceholderEntry(
+            igdb_api_frame,
             width=37,
-            textvariable=self._vars["steam_api_key"],
-            placeholder=_("gui", "settings", "general", "steam_api", "api_key_placeholder"),
+            textvariable=self._vars["igdb_client_id"],
+            placeholder="Enter IGDB Client ID",
             is_password=True
         )
-        self._steam_api_key.config(
+        self._igdb_client_id.config(
             validate="focusout",
-            validatecommand=partial(self._steam_api_key_validate, self._steam_api_key)
+            validatecommand=partial(self._igdb_client_id_validate, self._igdb_client_id)
         )
-        self._steam_api_key.grid(column=0, row=1)
-# Steam ID frame
-        steam_id_frame = ttk.Frame(center_frame2)
-        steam_id_frame.grid(column=0, row=5)
-        ttk.Label(steam_id_frame, text=_("gui", "settings", "general", "steam_api", "id")).grid(column=0, row=0)
-        self._steam_id = PlaceholderEntry(
-            steam_id_frame,
+        self._igdb_client_id.grid(column=0, row=1)
+# IGDB Access Token frame
+        igdb_token_frame = ttk.Frame(center_frame2)
+        igdb_token_frame.grid(column=0, row=5)
+        ttk.Label(igdb_token_frame, text="IGDB Access Token:").grid(column=0, row=0)
+        self._igdb_access_token = PlaceholderEntry(
+            igdb_token_frame,
             width=37,
-            textvariable=self._vars["steam_id"],
-            placeholder=_("gui", "settings", "general", "steam_api", "id_placeholder"),
+            textvariable=self._vars["igdb_access_token"],
+            placeholder="Enter IGDB Access Token",
             is_password=True
         )
-        self._steam_id.config(
+        self._igdb_access_token.config(
             validate="focusout",
-            validatecommand=partial(self._steam_id_validate, self._steam_id)
+            validatecommand=partial(self._igdb_access_token_validate, self._igdb_access_token)
         )
-        self._steam_id.grid(column=0, row=1)
-        # Add help text for Steam ID
+        self._igdb_access_token.grid(column=0, row=1)
+        # Add help text for IGDB Access Token
         help_text = ttk.Label(
-            steam_id_frame,
-            text=_("gui", "settings", "general", "steam_api", "id_help"),
+            igdb_token_frame,
+            text=_("gui", "settings", "general", "igdb_api", "help"),
             font=("TkDefaultFont", 8),
             foreground="gray"
         )
@@ -1705,41 +1704,32 @@ class SettingsPanel:
             priority_frame, text="+", command=self.priority_add, width=2, style="Large.TButton"
         ).grid(column=1, row=0)
 
-        # Steam sorting buttons frame
-        steam_sorting_frame = ttk.Frame(priority_frame)
-        steam_sorting_frame.grid(column=0, row=1, columnspan=1, sticky="ew")
+        # IGDB sorting buttons frame
+        igdb_sorting_frame = ttk.Frame(priority_frame)
+        igdb_sorting_frame.grid(column=0, row=1, columnspan=1, sticky="ew")
         # Configure row to be minimal height (no weight)
-        steam_sorting_frame.rowconfigure(0, weight=0)
+        igdb_sorting_frame.rowconfigure(0, weight=0)
 
-        self._steam_sort_playtime = ttk.Button(
-            steam_sorting_frame,
-            text="⏱️",
-            command=self._steam_sort_by_playtime,
-            state="disabled",
-            width=3
-        )
-        self._steam_sort_playtime.grid(column=0, row=0, padx=1, pady=1)
-
-        self._steam_sort_release = ttk.Button(
-            steam_sorting_frame,
+        self._igdb_sort_release = ttk.Button(
+            igdb_sorting_frame,
             text="📅",
-            command=self._steam_sort_by_release_date,
+            command=self._igdb_sort_by_release_date,
             state="disabled",
             width=3
         )
-        self._steam_sort_release.grid(column=1, row=0, padx=1, pady=1)
+        self._igdb_sort_release.grid(column=0, row=0, padx=1, pady=1)
 
-        self._steam_sort_rating = ttk.Button(
-            steam_sorting_frame,
+        self._igdb_sort_rating = ttk.Button(
+            igdb_sorting_frame,
             text="⭐",
-            command=self._steam_sort_by_rating,
+            command=self._igdb_sort_by_rating,
             state="disabled",
             width=3
         )
-        self._steam_sort_rating.grid(column=2, row=0, padx=1, pady=1)
+        self._igdb_sort_rating.grid(column=1, row=0, padx=1, pady=1)
 
         # Initialize button states after all buttons are created
-        self._update_steam_button_states()
+        self._update_igdb_button_states()
 
         self._priority_list = PaddedListbox(
             priority_frame,
@@ -1780,7 +1770,7 @@ class SettingsPanel:
             style="Large.TButton",
             command=partial(self.priority_move, True),
         ).grid(column=1, row=2, sticky="ns")
-        # Don't give weight to row 1 (Steam buttons row) - keep it minimal
+        # Don't give weight to row 1 (IGDB buttons row) - keep it minimal
         priority_frame.rowconfigure(1, weight=0)
         ttk.Button(
             priority_frame,
@@ -2227,296 +2217,184 @@ class SettingsPanel:
             target_idx = position - 1
             self._priority_move_item(current_idx, target_idx)
 
-    def _steam_api_key_validate(self, entry: PlaceholderEntry) -> bool:
-        """Validate Steam API key and update button states."""
+
+    def _update_igdb_button_states(self):
+        """Update IGDB sorting button states based on Client ID and Access Token availability."""
         try:
-            api_key = entry.get().strip()
-            self._settings.steam_api_key = api_key
-            self._settings.alter()
+            has_client_id = bool(self._settings.igdb_client_id.strip())
+            has_access_token = bool(self._settings.igdb_access_token.strip())
 
-            # Update button states based on both API key and Steam ID
-            self._update_steam_button_states()
+            # Both release date and rating sorting require IGDB credentials
+            button_state = "normal" if (has_client_id and has_access_token) else "disabled"
 
-            return True
-        except Exception as e:
-            print(f"Steam API key validation error: {e}")
-            return False
+            self._igdb_sort_release.config(state=button_state)
+            self._igdb_sort_rating.config(state=button_state)
 
-    def _steam_id_validate(self, entry: PlaceholderEntry) -> bool:
-        """Validate Steam ID and update button states."""
-        try:
-            steam_id = entry.get().strip()
-
-            # Basic Steam ID validation (should be numeric and 17 digits)
-            is_valid = steam_id.isdigit() and len(steam_id) == 17
-
-            if is_valid or not steam_id:  # Allow empty (will disable buttons)
-                self._settings.steam_id = steam_id
-                self._settings.alter()
-
-            # Update button states based on both API key and Steam ID
-            self._update_steam_button_states()
-
-            return True
-        except Exception as e:
-            print(f"Steam ID validation error: {e}")
-            return False
-
-    def _update_steam_button_states(self):
-        """Update Steam sorting button states based on API key and Steam ID availability."""
-        try:
-            has_api_key = bool(self._settings.steam_api_key.strip())
-            has_steam_id = bool(self._settings.steam_id.strip())
-
-            # Only playtime sorting requires Steam credentials
-            playtime_state = "normal" if (has_api_key and has_steam_id) else "disabled"
-
-            # Release date and rating sorting work without Steam (using simple fallbacks)
-            fallback_state = "normal"
-
-            self._steam_sort_playtime.config(state=playtime_state)
-            self._steam_sort_release.config(state=fallback_state)
-            self._steam_sort_rating.config(state=fallback_state)
-
-            if not (has_api_key and has_steam_id):
-                print("Steam playtime sorting disabled - Steam API key or Steam ID missing")
+            if not (has_client_id and has_access_token):
+                print("IGDB sorting disabled - Client ID or Access Token missing")
 
         except Exception as e:
-            print(f"Steam button state update error: {e}")
+            print(f"IGDB button state update error: {e}")
 
-    async def _steam_sort_games(self, sort_type: str):
-        """Generic Steam sorting function."""
-        if sort_type == "playtime":
-            # Only playtime sorting requires Steam API and ownership
-            if not self._settings.steam_api_key or not self._settings.steam_id:
-                print("Steam API key or Steam ID missing - required for playtime sorting")
-                return
-            await self._steam_sort_by_playtime_impl()
-        elif sort_type == "release_date":
-            # Simple alphabetical sort as fallback (could be enhanced with IGDB later)
-            await self._simple_sort_by_release_date()
+    async def _igdb_sort_games(self, sort_type: str):
+        """Generic IGDB sorting function."""
+        if sort_type == "release_date":
+            await self._igdb_sort_by_release_date()
         elif sort_type == "rating":
-            # Simple reverse alphabetical sort as fallback (could be enhanced with IGDB later)
-            await self._simple_sort_by_rating()
+            await self._igdb_sort_by_rating()
         else:
             print(f"Unknown sort_type: {sort_type}")
 
-    async def _steam_sort_by_playtime_impl(self):
-        """Sort by Steam playtime - only for owned games."""
-        try:
-            from steam_api import SteamAPIClient, SteamAPIError
 
-            # Get current priority list
-            current_priority = list(self._settings.priority)
-            if not current_priority:
-                print("No games in priority list to sort")
+    async def _igdb_sort_by_release_date(self):
+        """Sort by release date using IGDB API."""
+        print("Starting IGDB release date sort...")
+        current_priority = list(self._settings.priority)
+        if not current_priority:
+            print("No games in priority list")
+            return
+
+        print(f"Sorting {len(current_priority)} games by release date using IGDB")
+
+        # Check if we have IGDB credentials
+        if not self._settings.igdb_client_id or not self._settings.igdb_access_token:
+            print("IGDB credentials missing - keeping original priority order")
+            return
+
+        try:
+            from igdb_api import IGDBAPIClient, IGDBAPIError
+
+            # Get game IDs from Twitch data
+            game_ids = []
+            for game_name in current_priority:
+                # Find the game in the Twitch games list to get its ID
+                for game in self._manager._twitch.wanted_games.keys():
+                    if game.name == game_name:
+                        game_ids.append(game.id)
+                        break
+
+            if not game_ids:
+                print("No IGDB game IDs found - keeping original priority order")
                 return
 
-            print(f"Starting Steam playtime sort for {len(current_priority)} games")
+            print(f"Found {len(game_ids)} IGDB game IDs")
 
-            # Use the user-provided Steam ID
-            steam_id = self._settings.steam_id.strip()
+            # Use IGDB API to get game data
+            async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_access_token) as igdb_client:
+                games_data = await igdb_client.get_games_data(game_ids)
+                print(f"Retrieved {len(games_data)} games from IGDB")
 
-            # Use context manager for proper resource cleanup
-            async with SteamAPIClient(self._settings.steam_api_key) as steam_client:
-                # Get user's games data - only for priority list games
-                print(f"Fetching Steam data for user {steam_id}")
-                games_data = await steam_client.get_user_games_data(steam_id, current_priority)
-                print(f"Retrieved {len(games_data)} owned games from Steam")
-
-                # Create a mapping of game names to Steam data
-                steam_games_map = {game.name.lower(): game for game in games_data}
-
-                # Sort the priority list based on Steam playtime
-                def get_playtime_sort_key(game_name: str):
-                    steam_game = steam_games_map.get(game_name.lower())
-                    if not steam_game:
-                        # Games not owned on Steam go to end, sorted alphabetically
-                        return (0, game_name)
-                    # Higher playtime first, then alphabetical
-                    return (-steam_game.playtime_forever, game_name)
-
-                # Sort the priority list
-                sorted_priority = sorted(current_priority, key=get_playtime_sort_key)
-                print(f"Sorted by playtime: owned games first by playtime, then non-owned games")
-
-                self._update_priority_list_safely(sorted_priority)
-
-        except ImportError as e:
-            print(f"Steam API module not available: {e}")
-        except Exception as e:
-            print(f"Steam playtime sorting error: {e}")
-            import traceback
-            traceback.print_exc()
-
-    async def _simple_sort_by_release_date(self):
-        """Sort by release date using cached Steam data, fetching from API if needed."""
-        print("Starting release date sort...")
-        current_priority = list(self._settings.priority)
-        if not current_priority:
-            print("No games in priority list")
-            return
-
-        print(f"Sorting {len(current_priority)} games by release date")
-
-        # Load Steam data from cache
-        steam_data = {}
-        try:
-            from utils import json_load
-            from constants import STEAM_CACHE_DB
-            steam_data = json_load(STEAM_CACHE_DB, {})
-            print(f"Loaded Steam data with {len(steam_data)} cache entries")
-        except Exception as e:
-            print(f"Failed to load Steam data: {e}")
-            steam_data = {}
-
-        # If no cached data and we have Steam credentials, fetch from API
-        if not steam_data and self._settings.steam_api_key and self._settings.steam_id:
-            print("No cached Steam data found, fetching from Steam API...")
-            try:
-                from steam_api import SteamAPIClient, SteamAPIError
-
-                async with SteamAPIClient(self._settings.steam_api_key) as steam_client:
-                    # Get user's games data - only for priority list games
-                    print(f"Fetching Steam data for user {self._settings.steam_id}")
-                    games_data = await steam_client.get_user_games_data(self._settings.steam_id, current_priority)
-                    print(f"Retrieved {len(games_data)} games from Steam")
-
-                    # Create a mapping of game names to Steam data
-                    steam_games_map = {game.name.lower(): game for game in games_data}
-
-                    # Sort the priority list based on Steam release date
-                    def get_release_date_sort_key(game_name: str):
-                        steam_game = steam_games_map.get(game_name.lower())
-                        if not steam_game or not steam_game.release_date:
-                            # Games without Steam data or release date go to end, sorted alphabetically
-                            return (1, game_name.lower())
-
-                        try:
-                            # Parse Steam date format: "DD MMM, YYYY" or "MMM DD, YYYY"
-                            from datetime import datetime
-                            try:
-                                date_obj = datetime.strptime(steam_game.release_date, "%d %b, %Y")
-                            except ValueError:
-                                date_obj = datetime.strptime(steam_game.release_date, "%b %d, %Y")
-                            return (0, date_obj)  # Has date = sort by date (oldest first)
-                        except ValueError:
-                            return (1, game_name.lower())  # Invalid date = end of list
-
-                    # Sort the priority list
-                    sorted_priority = sorted(current_priority, key=get_release_date_sort_key)
-                    print(f"Sorted by release date: {sorted_priority[:5]}...")  # Show first 5 games
-
-                    self._update_priority_list_safely(sorted_priority)
+                if not games_data:
+                    print("No IGDB data available - keeping original priority order")
                     return
 
-            except ImportError as e:
-                print(f"Steam API module not available: {e}")
-                # Don't change the order - preserve user's work
-            except Exception as e:
-                print(f"Steam API error: {e}")
-                import traceback
-                traceback.print_exc()
-                # Don't change the order - preserve user's work
+                # Create a mapping of game names to IGDB data
+                igdb_data = {}
+                for game in games_data:
+                    # Find the corresponding game name
+                    for twitch_game in self._manager._twitch.wanted_games.keys():
+                        if twitch_game.id == game.igdb_id:
+                            igdb_data[twitch_game.name] = {
+                                "release_date": game.release_date,
+                                "rating": game.rating
+                            }
+                            break
 
-        # Fallback: use cached data or keep original order
-        if not steam_data:
-            print("No Steam data available - keeping original priority order")
-            # Don't change the order at all - preserve user's work
-            return
+                # Sort by release date
+                def get_release_date(game_name):
+                    game_data = igdb_data.get(game_name, {})
+                    release_date = game_data.get("release_date")
+                    if not release_date:
+                        return "9999-12-31"  # Put games without dates at the end
+                    return release_date
 
-        # Create a mapping of game names to release dates from cache
-        game_release_dates = {}
-        for cache_key, cache_entry in steam_data.items():
-            if isinstance(cache_entry, dict) and "data" in cache_entry:
-                data = cache_entry["data"]
-                if isinstance(data, list):
-                    for game_data in data:
-                        if isinstance(game_data, dict) and "name" in game_data and "release_date" in game_data:
-                            game_name = game_data["name"]
-                            release_date = game_data.get("release_date")
-                            if release_date:
-                                game_release_dates[game_name.lower()] = release_date
-                                print(f"Found release date for {game_name}: {release_date}")
+                sorted_priority = sorted(current_priority, key=get_release_date)
+                print(f"Sorted {len(sorted_priority)} games by release date")
 
-        print(f"Found release dates for {len(game_release_dates)} games")
+                # Update the priority list
+                self._update_priority_list_safely(sorted_priority)
 
-        # Sort by release date, with games without dates at the end
-        def get_sort_key(game_name):
-            release_date = game_release_dates.get(game_name.lower())
-            if not release_date:
-                return (1, game_name.lower())  # No date = end of list
+        except ImportError as e:
+            print(f"IGDB API module not available: {e}")
+        except Exception as e:
+            print(f"IGDB API error: {e}")
+            import traceback
+            traceback.print_exc()
 
-            try:
-                # Parse Steam date format: "DD MMM, YYYY" or "MMM DD, YYYY"
-                from datetime import datetime
-                try:
-                    date_obj = datetime.strptime(release_date, "%d %b, %Y")
-                except ValueError:
-                    date_obj = datetime.strptime(release_date, "%b %d, %Y")
-                return (0, date_obj)  # Has date = sort by date
-            except ValueError:
-                return (1, game_name.lower())  # Invalid date = end of list
-
-        sorted_priority = sorted(current_priority, key=get_sort_key)
-        print(f"Sorted priority list: {sorted_priority[:5]}...")  # Show first 5 games
-
-        # Persist and request GUI update
-        self._update_priority_list_safely(sorted_priority)
-
-    async def _simple_sort_by_rating(self):
-        """Sort by rating using Steam API data."""
-        print("Starting rating sort...")
+    async def _igdb_sort_by_rating(self):
+        """Sort by rating using IGDB API data."""
+        print("Starting IGDB rating sort...")
         current_priority = list(self._settings.priority)
         if not current_priority:
             print("No games in priority list")
             return
 
-        print(f"Sorting {len(current_priority)} games by rating")
+        print(f"Sorting {len(current_priority)} games by rating using IGDB")
 
-        # Check if we have Steam credentials
-        if not self._settings.steam_api_key or not self._settings.steam_id:
-            print("Steam API key or Steam ID missing - keeping original priority order")
-            # Don't change the order at all - preserve user's work
+        # Check if we have IGDB credentials
+        if not self._settings.igdb_client_id or not self._settings.igdb_access_token:
+            print("IGDB credentials missing - keeping original priority order")
             return
 
         try:
-            from steam_api import SteamAPIClient, SteamAPIError
+            from igdb_api import IGDBAPIClient, IGDBAPIError
 
-            # Use context manager for proper resource cleanup
-            async with SteamAPIClient(self._settings.steam_api_key) as steam_client:
-                # Get user's games data - only for priority list games
-                print(f"Fetching Steam data for user {self._settings.steam_id}")
-                games_data = await steam_client.get_user_games_data(self._settings.steam_id, current_priority)
-                print(f"Retrieved {len(games_data)} games from Steam")
+            # Get game IDs from Twitch data
+            game_ids = []
+            for game_name in current_priority:
+                # Find the game in the Twitch games list to get its ID
+                for game in self._manager._twitch.wanted_games.keys():
+                    if game.name == game_name:
+                        game_ids.append(game.id)
+                        break
 
-                # Create a mapping of game names to Steam data
-                steam_games_map = {game.name.lower(): game for game in games_data}
+            if not game_ids:
+                print("No IGDB game IDs found - keeping original priority order")
+                return
 
-                # Sort the priority list based on Steam rating
-                def get_rating_sort_key(game_name: str):
-                    steam_game = steam_games_map.get(game_name.lower())
-                    if not steam_game or steam_game.rating is None:
-                        # Games without Steam data or rating go to end, sorted alphabetically
-                        return (1, game_name.lower())
+            print(f"Found {len(game_ids)} IGDB game IDs")
 
-                    # Higher rating first, then alphabetical
-                    return (0, -steam_game.rating, game_name.lower())
+            # Use IGDB API to get game data
+            async with IGDBAPIClient(self._settings.igdb_client_id, self._settings.igdb_access_token) as igdb_client:
+                games_data = await igdb_client.get_games_data(game_ids)
+                print(f"Retrieved {len(games_data)} games from IGDB")
 
-                # Sort the priority list
-                sorted_priority = sorted(current_priority, key=get_rating_sort_key)
-                print(f"Sorted by rating: {sorted_priority[:5]}...")  # Show first 5 games
+                if not games_data:
+                    print("No IGDB data available - keeping original priority order")
+                    return
 
+                # Create a mapping of game names to IGDB data
+                igdb_data = {}
+                for game in games_data:
+                    # Find the corresponding game name
+                    for twitch_game in self._manager._twitch.wanted_games.keys():
+                        if twitch_game.id == game.igdb_id:
+                            igdb_data[twitch_game.name] = {
+                                "release_date": game.release_date,
+                                "rating": game.rating
+                            }
+                            break
+
+                # Sort by rating (highest first)
+                def get_rating(game_name):
+                    game_data = igdb_data.get(game_name, {})
+                    rating = game_data.get("rating")
+                    if rating is None:
+                        return 0.0  # Games without ratings go to end
+                    return rating
+
+                sorted_priority = sorted(current_priority, key=get_rating, reverse=True)
+                print(f"Sorted {len(sorted_priority)} games by rating")
+
+                # Update the priority list
                 self._update_priority_list_safely(sorted_priority)
 
         except ImportError as e:
-            print(f"Steam API module not available: {e}")
-            # Don't change the order - preserve user's work
+            print(f"IGDB API module not available: {e}")
         except Exception as e:
-            print(f"Steam rating sorting error: {e}")
+            print(f"IGDB API error: {e}")
             import traceback
             traceback.print_exc()
-            # Don't change the order - preserve user's work
 
     def _update_priority_list_safely(self, sorted_priority: list[str]):
         """Safely update the priority list and GUI from any thread."""
@@ -2542,91 +2420,78 @@ class SettingsPanel:
         except Exception:
             pass
 
-    def _steam_sort_by_playtime(self):
-        """Sort priority list by Steam playtime."""
-        print("=== Steam sort by playtime clicked ===")
-        print(f"API Key present: {bool(self._settings.steam_api_key)}")
-        print(f"Steam ID present: {bool(self._settings.steam_id)}")
-        print(f"API Key value: {self._settings.steam_api_key[:8]}...")
-        print(f"Steam ID value: {self._settings.steam_id}")
-        print(f"Priority list length: {len(self._settings.priority)}")
-        self._run_steam_sort("playtime")
 
-    def _steam_sort_by_release_date(self):
-        """Sort priority list by Steam release date."""
-        print("=== Steam sort by release date clicked ===")
+    def _igdb_sort_by_release_date(self):
+        """Sort priority list by IGDB release date."""
+        print("=== IGDB sort by release date clicked ===")
         # Log to file so it shows up with pythonw.exe
         try:
             import logging
-            logging.getLogger("TwitchDrops").info("Steam sort (release_date) clicked")
+            logging.getLogger("TwitchDrops").info("IGDB sort (release_date) clicked")
         except Exception:
             pass
-        self._run_steam_sort("release_date")
+        self._run_igdb_sort("release_date")
 
-    def _steam_sort_by_rating(self):
-        """Sort priority list by Steam rating."""
-        print("=== Steam sort by rating clicked ===")
-        print(f"API Key present: {bool(self._settings.steam_api_key)}")
-        print(f"Steam ID present: {bool(self._settings.steam_id)}")
-        print(f"API Key value: {self._settings.steam_api_key[:8]}...")
-        print(f"Steam ID value: {self._settings.steam_id}")
+    def _igdb_sort_by_rating(self):
+        """Sort priority list by IGDB rating."""
+        print("=== IGDB sort by rating clicked ===")
+        print(f"Client ID present: {bool(self._settings.igdb_client_id)}")
+        print(f"Access Token present: {bool(self._settings.igdb_access_token)}")
+        print(f"Client ID value: {self._settings.igdb_client_id[:8]}...")
         print(f"Priority list length: {len(self._settings.priority)}")
-        self._run_steam_sort("rating")
+        self._run_igdb_sort("rating")
 
-    def _run_steam_sort(self, sort_type: str):
-        """Run Steam sorting in a separate thread to avoid blocking the GUI."""
+    def _run_igdb_sort(self, sort_type: str):
+        """Run IGDB sorting in a separate thread to avoid blocking the GUI."""
         import asyncio
         import threading
 
-        print(f"Starting Steam sort for {sort_type}")
+        print(f"Starting IGDB sort for {sort_type}")
 
         # Disable buttons to prevent multiple simultaneous sorts
-        self._steam_sort_playtime.config(state="disabled")
-        self._steam_sort_release.config(state="disabled")
-        self._steam_sort_rating.config(state="disabled")
+        self._igdb_sort_release.config(state="disabled")
+        self._igdb_sort_rating.config(state="disabled")
 
         # Update button text to show progress
         sort_type_map = {
-            "playtime": "⏱️",
             "release_date": "📅",
             "rating": "⭐"
         }
         button_map = {
-            "playtime": self._steam_sort_playtime,
-            "release_date": self._steam_sort_release,
-            "rating": self._steam_sort_rating
+            "release_date": self._igdb_sort_release,
+            "rating": self._igdb_sort_rating
         }
 
         original_text = button_map[sort_type].cget("text")
         button_map[sort_type].config(text="⏳")
 
-        def run_steam_sort_thread():
-            """Run Steam sorting in a separate thread with proper event loop handling."""
-            print(f"Starting Steam sort thread for {sort_type}")
+        def run_igdb_sort_thread():
+            """Run IGDB sorting in a separate thread with proper event loop handling."""
+            print(f"Starting IGDB sort thread for {sort_type}")
             try:
                 # Create a new event loop for this thread
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                print("Created new event loop for Steam sort")
+                print("Created new event loop for IGDB sort")
 
                 # Run the async function with timeout
-                print("Running steam_sort_games...")
+                print("Running igdb_sort_games...")
                 try:
                     # Add a timeout to prevent hanging
-                    loop.run_until_complete(asyncio.wait_for(self._steam_sort_games(sort_type), timeout=60))
-                    print("Steam sort completed successfully")
+                    loop.run_until_complete(asyncio.wait_for(self._igdb_sort_games(sort_type), timeout=60))
+                    print("IGDB sort completed successfully")
                 except asyncio.TimeoutError:
-                    print("Steam sort timed out after 60 seconds")
+                    print("IGDB sort timed out after 60 seconds")
                 except Exception as e:
-                    print(f"Steam sort failed: {e}")
+                    print(f"IGDB sort failed: {e}")
                     raise
 
             except Exception as e:
-                print(f"Steam sort error: {e}")
+                print(f"IGDB sort error: {e}")
                 import traceback
                 traceback.print_exc()
             finally:
-                print("Closing Steam sort event loop")
+                print("Closing IGDB sort event loop")
                 try:
                     # Cancel any remaining tasks
                     pending = asyncio.all_tasks(loop)
@@ -2639,31 +2504,30 @@ class SettingsPanel:
 
                     # Close the loop
                     loop.close()
-                    print("Steam sort event loop closed")
+                    print("IGDB sort event loop closed")
                 except Exception as cleanup_error:
                     print(f"Error during cleanup: {cleanup_error}")
 
                                 # Re-enable buttons and restore text (thread-safe)
                 try:
-                    # Use after_idle to schedule on the main thread
-                    self._root.after_idle(lambda: self._restore_steam_buttons())
+                    # Set a flag for the main thread to restore buttons
+                    self._manager._pending_button_restore = True
                 except Exception as restore_error:
-                    print(f"Error restoring buttons: {restore_error}")
+                    print(f"Error setting button restore flag: {restore_error}")
 
         # Run in a separate thread to avoid blocking the GUI
-        thread = threading.Thread(target=run_steam_sort_thread, daemon=True)
+        thread = threading.Thread(target=run_igdb_sort_thread, daemon=True)
         thread.start()
-        print("Steam sort thread started")
+        print("IGDB sort thread started")
 
-    def _restore_steam_buttons(self):
-        """Restore Steam sorting buttons to their normal state (called from main thread)."""
+    def _restore_igdb_buttons(self):
+        """Restore IGDB sorting buttons to their normal state (called from main thread)."""
         try:
-            self._steam_sort_playtime.config(state="normal", text="⏱️")
-            self._steam_sort_release.config(state="normal", text="📅")
-            self._steam_sort_rating.config(state="normal", text="⭐")
-            self._update_steam_button_states()
+            self._igdb_sort_release.config(state="normal", text="📅")
+            self._igdb_sort_rating.config(state="normal", text="⭐")
+            self._update_igdb_button_states()
         except Exception as e:
-            print(f"Error restoring Steam buttons: {e}")
+            print(f"Error restoring IGDB buttons: {e}")
 
 
 class HelpTab:
@@ -3026,6 +2890,18 @@ class GUIManager:
                         # Do not crash the loop; clear on failure
                         try:
                             delattr(self, '_pending_priority_update')
+                        except Exception:
+                            pass
+
+                # Restore IGDB buttons if needed
+                if hasattr(self, '_pending_button_restore'):
+                    try:
+                        self.settings._restore_igdb_buttons()
+                        delattr(self, '_pending_button_restore')
+                    except Exception:
+                        # Do not crash the loop; clear on failure
+                        try:
+                            delattr(self, '_pending_button_restore')
                         except Exception:
                             pass
 

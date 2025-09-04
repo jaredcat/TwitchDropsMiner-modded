@@ -33,6 +33,8 @@ class SettingsFile(TypedDict):
     window_position: str
     steam_api_key: str
     steam_id: str
+    igdb_client_id: str
+    igdb_access_token: str
 
 
 default_settings: SettingsFile = {
@@ -51,6 +53,8 @@ default_settings: SettingsFile = {
     "window_position": "",
     "steam_api_key": "",
     "steam_id": "",
+    "igdb_client_id": "",
+    "igdb_access_token": "",
 }
 
 

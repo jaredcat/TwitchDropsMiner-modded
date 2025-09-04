@@ -143,12 +143,12 @@
                 "tray_notifications": "Tray notifications: ",
                 "priority_only": "Priority Only: ",
                 "prioritize_by_ending_soonest": "Prioritize by ending soonest: ",
-                "steam_api": {
-                    "api_key": "Steam API Key: ",
-                    "api_key_placeholder": "Enter your Steam API Key",
-                    "id": "Steam ID: ",
-                    "id_help": "💡 Find your Steam ID at: steamidfinder.com or steamid.io",
-                    "id_placeholder": "Enter your Steam ID (e.g., 76561198000000000)"
+                "igdb_api": {
+                    "client_id": "IGDB Client ID: ",
+                    "client_id_placeholder": "Enter your IGDB Client ID",
+                    "access_token": "IGDB Access Token: ",
+                    "access_token_placeholder": "Enter your IGDB Access Token",
+                    "help": "Get credentials from https://api-docs.igdb.com/"
                 },
                 "unlinked_campaigns": "Allow Unlinked Campaigns: ",
                 "proxy": "Proxy (requires restart):",
