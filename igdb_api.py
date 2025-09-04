@@ -145,12 +145,15 @@ class IGDBAPIClient:
             return self._persistent_cache[cache_key]["data"]
         return None
 
-    def _cache_data(self, cache_key: str, data: Any):
-        """Cache data with timestamp."""
-        self._persistent_cache[cache_key] = {
+    def _cache_data(self, cache_key: str, data: Any, search_term: str = None):
+        """Cache data with timestamp and optional search term."""
+        cache_entry = {
             "data": data,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
+        if search_term:
+            cache_entry["search_term"] = search_term
+        self._persistent_cache[cache_key] = cache_entry
         self._save_persistent_cache()
 
     def _is_memory_cache_valid(self, key: str) -> bool:
@@ -211,12 +214,17 @@ class IGDBAPIClient:
             print(f"IGDB API network error: {e}")
             raise IGDBAPIError(f"Network error: {e}")
 
-    async def get_games_data(self, game_ids: List[int]) -> List[IGDBGame]:
+    async def get_games_data(self, game_ids: List[int], game_names: List[str] = None) -> List[IGDBGame]:
         """Get game data for specific IGDB game IDs."""
         if not game_ids:
             return []
 
         print(f"Requesting IGDB data for {len(game_ids)} games: {game_ids[:10]}{'...' if len(game_ids) > 10 else ''}")
+
+        # Create mapping from game ID to name if provided
+        id_to_name = {}
+        if game_names and len(game_names) == len(game_ids):
+            id_to_name = dict(zip(game_ids, game_names))
 
         # Check individual game cache first
         results = []
@@ -240,7 +248,7 @@ class IGDBAPIClient:
         print(f"Fetching IGDB data for {len(uncached_ids)} uncached games")
 
         # Process in batches to avoid API limits
-        batch_size = 50  # IGDB allows up to 500, but let's be conservative
+        batch_size = 100  # IGDB allows up to 500
         all_games = results.copy()
 
         for i in range(0, len(uncached_ids), batch_size):
@@ -263,9 +271,10 @@ class IGDBAPIClient:
                     game = self._create_game_from_data(game_data)
                     all_games.append(game)
 
-                    # Cache individual game
+                    # Cache individual game with search term if available
                     cache_key = self._get_cache_key(f"game_{game_data['id']}")
-                    self._cache_data(cache_key, game_data)
+                    search_term = id_to_name.get(game_data['id'])
+                    self._cache_data(cache_key, game_data, search_term=search_term)
 
                 # Small delay between batches to be respectful to the API
                 if i + batch_size < len(uncached_ids):
@@ -294,39 +303,41 @@ class IGDBAPIClient:
             print(f"Processing name batch {i//batch_size + 1}: {len(batch_names)} games")
 
             # Build search query for IGDB API
-            # Use fuzzy matching with name search
-            search_terms = []
+            # Search for each game individually to get better matches
+            all_games = []
             for name in batch_names:
                 # Escape special characters and add fuzzy matching
                 escaped_name = name.replace('"', '\\"')
-                search_terms.append(f'name ~ "{escaped_name}"*')
 
-            query = f"""
-            fields id,name,first_release_date,rating,rating_count;
-            search "{batch_names[0]}";
-            where {search_terms[0] if len(search_terms) == 1 else ' | '.join(search_terms)};
-            limit {len(batch_names) * 2};
-            """
+                query = f"""
+                fields id,name,first_release_date,rating,rating_count;
+                search "{escaped_name}";
+                where name ~ "{escaped_name}"*;
+                limit 5;
+                """
 
-            try:
-                data = await self._make_request("games", query)
-                print(f"IGDB search returned {len(data)} games for batch")
+                try:
+                    data = await self._make_request("games", query)
+                    print(f"IGDB search for '{name}' returned {len(data)} results")
 
-                for game_data in data:
-                    game = self._create_game_from_data(game_data)
-                    all_games.append(game)
+                    for game_data in data:
+                        game = self._create_game_from_data(game_data)
+                        all_games.append(game)
 
-                    # Cache individual game data
-                    cache_key = self._get_cache_key(f"game_{game_data['id']}")
-                    self._cache_data(cache_key, game_data)
+                        # Cache individual game data with search term
+                        cache_key = self._get_cache_key(f"game_{game_data['id']}")
+                        self._cache_data(cache_key, game_data, search_term=name)
 
-                # Small delay between batches
-                if i + batch_size < len(game_names):
-                    await asyncio.sleep(0.5)
+                    # Small delay between individual searches
+                    await asyncio.sleep(0.1)
 
-            except IGDBAPIError as e:
-                print(f"Failed to search IGDB for batch: {e}")
-                continue
+                except IGDBAPIError as e:
+                    print(f"Failed to search IGDB for '{name}': {e}")
+                    continue
+
+            # Small delay between batches
+            if i + batch_size < len(game_names):
+                await asyncio.sleep(0.5)
 
         print(f"Successfully found {len(all_games)} games total")
         return all_games
@@ -441,7 +452,9 @@ class IGDBAPIClient:
         games_data = []
         if game_ids:
             print(f"Getting IGDB data for {len(game_ids)} games by ID: {game_ids[:5]}{'...' if len(game_ids) > 5 else ''}")
-            games_data = await self.get_games_data(game_ids)
+            # Pass the corresponding game names for better caching
+            found_game_names = [name for name in found_by_id]
+            games_data = await self.get_games_data(game_ids, found_game_names)
             print(f"Retrieved IGDB data for {len(games_data)} games from drops")
 
         # For games not found in drops, search by name
@@ -502,7 +515,9 @@ class IGDBAPIClient:
         # Get IGDB data for games found in drops
         games_data = []
         if game_ids:
-            games_data = await self.get_games_data(game_ids)
+            # Pass the corresponding game names for better caching
+            found_game_names = [name for name in found_by_id]
+            games_data = await self.get_games_data(game_ids, found_game_names)
             print(f"Retrieved IGDB data for {len(games_data)} games from drops")
 
         # For games not found in drops, search by name
