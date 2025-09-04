@@ -2419,11 +2419,21 @@ class SettingsPanel:
         logger = logging.getLogger("TwitchDrops")
         logger.info("Setting flag for GUI update on next poll cycle...")
         print("Setting flag for GUI update on next poll cycle...")
-        self._priority_needs_refresh = True
-        # Also set flag on manager.settings so the GUI poll loop can find it
-        self._manager.settings._priority_needs_refresh = True
-        logger.info(f"Flag set on SettingsPanel: _priority_needs_refresh = {self._priority_needs_refresh}")
-        logger.info(f"Flag set on Manager.settings: _priority_needs_refresh = {self._manager.settings._priority_needs_refresh}")
+
+        try:
+            self._priority_needs_refresh = True
+            logger.info("Flag set on SettingsPanel successfully")
+        except Exception as e:
+            logger.error(f"Failed to set flag on SettingsPanel: {e}")
+
+        try:
+            # Also set flag on manager.settings so the GUI poll loop can find it
+            self._manager.settings._priority_needs_refresh = True
+            logger.info("Flag set on Manager.settings successfully")
+        except Exception as e:
+            logger.error(f"Failed to set flag on Manager.settings: {e}")
+
+        logger.info(f"Final flag states - SettingsPanel: {getattr(self, '_priority_needs_refresh', 'NOT_SET')}, Manager.settings: {getattr(self._manager.settings, '_priority_needs_refresh', 'NOT_SET')}")
 
     def _steam_sort_by_playtime(self):
         """Sort priority list by Steam playtime."""
@@ -2886,6 +2896,13 @@ class GUIManager:
                 update()
 
                 # Check if priority list needs refreshing from background sort
+                # Debug: Check flag periodically
+                if hasattr(self.settings, '_priority_needs_refresh'):
+                    if self.settings._priority_needs_refresh:
+                        import logging
+                        logger = logging.getLogger("TwitchDrops")
+                        logger.info("Flag detected in GUI poll loop - starting refresh...")
+
                 if hasattr(self.settings, '_priority_needs_refresh') and self.settings._priority_needs_refresh:
                     try:
                         import logging
