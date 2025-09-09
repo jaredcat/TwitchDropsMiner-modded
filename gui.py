@@ -1090,6 +1090,8 @@ class TrayIcon:
 
     def _start(self):
         loop = asyncio.get_running_loop()
+        if "HEADLESS" in os.environ:
+            return
         if not self.always_show_icon:
             drop = self._manager.progress._drop
 

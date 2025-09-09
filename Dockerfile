@@ -16,6 +16,7 @@ ENTRYPOINT ["./docker_entrypoint.sh"]
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=5m --retries=3 CMD ./healthcheck.sh
 
+ENV HEADLESS=1
 ENV UNLINKED_CAMPAIGNS=1
 ENV prioritize_by_ending_soonest=0
 CMD timeout $(( (60 - $(date +%-M)) * 60 - $(date +%-S) )) python main.py -vvvv
