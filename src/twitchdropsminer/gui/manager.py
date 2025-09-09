@@ -81,20 +81,28 @@ class GUIManager:
         # remove Notebook.focus from the Notebook.Tab layout tree to avoid an ugly dotted line
         # on tab selection. We fold the Notebook.focus children into Notebook.padding children.
         if theme != "classic":
-            original = style.layout("TNotebook.Tab")
-            sublayout = original[0][1]["children"][0][1]
-            sublayout["children"] = sublayout["children"][0][1]["children"]
-            style.layout("TNotebook.Tab", original)
+            try:
+                original = style.layout("TNotebook.Tab")
+                sublayout = original[0][1]["children"][0][1]
+                sublayout["children"] = sublayout["children"][0][1]["children"]
+                style.layout("TNotebook.Tab", original)
+            except (KeyError, IndexError, TypeError):
+                # Theme structure is different than expected, skip this customization
+                pass
         # add padding to the tab names
         style.configure("TNotebook.Tab", padding=[8, 4])
         # remove Checkbutton.focus dotted line from checkbuttons
         if theme != "classic":
             style.configure("TCheckbutton", padding=0)
-            original = style.layout("TCheckbutton")
-            sublayout = original[0][1]["children"]
-            sublayout[1] = sublayout[1][1]["children"][0]
-            del original[0][1]["children"][1]
-            style.layout("TCheckbutton", original)
+            try:
+                original = style.layout("TCheckbutton")
+                sublayout = original[0][1]["children"]
+                sublayout[1] = sublayout[1][1]["children"][0]
+                del original[0][1]["children"][1]
+                style.layout("TCheckbutton", original)
+            except (KeyError, IndexError, TypeError):
+                # Theme structure is different than expected, skip this customization
+                pass
         # label style - green, yellow and red text
         style.configure("green.TLabel", foreground="green")
         style.configure("yellow.TLabel", foreground="goldenrod")
