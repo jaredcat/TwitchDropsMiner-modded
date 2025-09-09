@@ -8,14 +8,14 @@ from base64 import b64encode
 from functools import cached_property
 from typing import Any, SupportsInt, TYPE_CHECKING
 
-from utils import invalidate_cache, json_minify, Game
-from exceptions import MinerException, RequestException
-from constants import CALL, GQL_OPERATIONS, ONLINE_DELAY, URLType
+from .utils import invalidate_cache, json_minify, Game
+from .exceptions import MinerException, RequestException
+from .constants import CALL, GQL_OPERATIONS, ONLINE_DELAY, URLType
 
 if TYPE_CHECKING:
-    from twitch import Twitch
-    from gui import ChannelList
-    from constants import JsonType
+    from .twitch import Twitch
+    from .gui import ChannelList
+    from .constants import JsonType
 
 
 logger = logging.getLogger("TwitchDrops")
@@ -402,7 +402,7 @@ class Channel:
         except RequestException:
             logger.error(f"Failed to recieve list of m3u8 playlists.")
             return False, False
-        
+
         BroadcastQualitiesM3U = BroadcastQualitiesM3U.split("\n")
         BroadcastQualitiesList = []
         for i in range(int(len(BroadcastQualitiesM3U)/3)):              # gets all m3u8 playlists

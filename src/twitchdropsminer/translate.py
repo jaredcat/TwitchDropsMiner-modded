@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections import abc
 from typing import Any, TypedDict, TYPE_CHECKING
 
-from exceptions import MinerException
-from utils import json_load
-from constants import LANG_PATH, DEFAULT_LANG
+from .exceptions import MinerException
+from .utils import json_load
+from .constants import LANG_PATH, DEFAULT_LANG
 import json
 
 if TYPE_CHECKING:

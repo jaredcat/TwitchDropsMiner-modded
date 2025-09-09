@@ -1,3 +1,13 @@
+"""
+WebSocket functionality for Twitch Drops Miner.
+
+This module handles all WebSocket-related functionality including:
+- WebSocket connections and management
+- Drop progress messages
+- Points and notifications
+- Message processing and routing
+"""
+
 from __future__ import annotations
 
 import json
@@ -5,14 +15,15 @@ import asyncio
 import logging
 from time import time
 from contextlib import suppress
+from datetime import datetime, timezone
 from typing import Any, Literal, TYPE_CHECKING
 
 import aiohttp
 
-from translate import _
-from exceptions import MinerException, WebsocketClosed
-from constants import PING_INTERVAL, PING_TIMEOUT, MAX_WEBSOCKETS, WS_TOPICS_LIMIT
-from utils import (
+from ..translate import _
+from ..exceptions import MinerException, WebsocketClosed
+from ..constants import PING_INTERVAL, PING_TIMEOUT, MAX_WEBSOCKETS, WS_TOPICS_LIMIT, CALL, GQL_OPERATIONS
+from ..utils import (
     CHARS_ASCII,
     task_wrapper,
     create_nonce,
@@ -24,15 +35,177 @@ from utils import (
 
 if TYPE_CHECKING:
     from collections import abc
-
-    from twitch import Twitch
-    from gui import WebsocketStatus
-    from constants import JsonType, WebsocketTopic
+    from .client import Twitch
+    from ..gui import WebsocketStatus
+    from ..constants import JsonType, WebsocketTopic
 
 
 WSMsgType = aiohttp.WSMsgType
 logger = logging.getLogger("TwitchDrops")
 ws_logger = logging.getLogger("TwitchDrops.websocket")
+
+
+class WebsocketManager:
+    """Manages WebSocket message processing."""
+
+    def __init__(self, twitch: Twitch):
+        self.twitch = twitch
+
+    @task_wrapper
+    async def process_drops(self, user_id: int, message: dict):
+        """Process drops websocket messages."""
+        # Message examples:
+        # {"type": "drop-progress", data: {"current_progress_min": 3, "required_progress_min": 10}}
+        # {"type": "drop-claim", data: {"drop_instance_id": ...}}
+        msg_type: str = message["type"]
+        if msg_type not in ("drop-progress", "drop-claim"):
+            return
+        drop_id: str = message["data"]["drop_id"]
+        drop = self.twitch.drops.get_drop(drop_id)
+        if msg_type == "drop-claim":
+            if drop is None:
+                logger = logging.getLogger("TwitchDrops")
+                logger.error(
+                    f"Received a drop claim ID for a non-existing drop: {drop_id}\n"
+                    f"Drop claim ID: {message['data']['drop_instance_id']}"
+                )
+                return
+            drop.update_claim(message["data"]["drop_instance_id"])
+            campaign = drop.campaign
+            mined = await drop.claim()
+            drop.display()
+            if mined:
+                claim_text = (
+                    f"{campaign.game.name}\n"
+                    f"{drop.rewards_text()} ({campaign.claimed_drops}/{campaign.total_drops})"
+                )
+                # two different claim texts, becase a new line after the game name
+                # looks ugly in the output window - replace it with a space
+                self.twitch.print(_("status", "claimed_drop").format(drop=claim_text.replace('\n', ' ')))
+                self.twitch.gui.tray.notify(claim_text, _("gui", "tray", "notification_title"))
+            else:
+                logger = logging.getLogger("TwitchDrops")
+                logger.error(f"Drop claim has potentially failed! Drop ID: {drop_id}")
+            # About 4-20s after claiming the drop, next drop can be started
+            # by re-sending the watch payload. We can test for it by fetching the current drop
+            # via GQL, and then comparing drop IDs.
+            await asyncio.sleep(4)
+            for attempt in range(8):
+                context = await self.twitch.gql_request(GQL_OPERATIONS["CurrentDrop"])
+                drop_data: JsonType | None = (
+                    context["data"]["currentUser"]["dropCurrentSession"]
+                )
+                if drop_data is None or drop_data["dropID"] != drop.id:
+                    break
+                await asyncio.sleep(2)
+            if campaign.can_earn(self.twitch.streams.watching_channel.get_with_default(None)):
+                self.twitch.streams.restart_watching()
+            else:
+                from constants import State
+                self.twitch.change_state(State.INVENTORY_FETCH)
+            return
+        assert msg_type == "drop-progress"
+        if drop is not None:
+            drop_text = (
+                f"{drop.name} ({drop.campaign.game}, "
+                f"{message['data']['current_progress_min']}/"
+                f"{message['data']['required_progress_min']})"
+            )
+        else:
+            drop_text = "<Unknown>"
+        logger = logging.getLogger("TwitchDrops")
+        logger.log(CALL, f"Drop update from websocket: {drop_text}")
+        drop_update_future = self.twitch.streams.get_drop_update_future()
+        if drop_update_future is None:
+            # we aren't actually waiting for a progress update right now, so we can just
+            # ignore the event this time
+            return
+        elif drop is not None and drop.can_earn(self.twitch.streams.watching_channel.get_with_default(None)):
+            # the received payload is for the drop we expected
+            drop.update_minutes(message["data"]["current_progress_min"])
+            drop.display()
+            # Let the watch loop know we've handled it here
+            drop_update_future.set_result(True)
+        else:
+            # Sometimes, the drop update we receive doesn't actually match what we're mining.
+            # This is a Twitch bug workaround: signal the watch loop to use GQL
+            # to get the current drop progress instead.
+            drop_update_future.set_result(False)
+        self.twitch.streams.set_drop_update_future(None)
+
+    @task_wrapper
+    async def process_notifications(self, user_id: int, message: dict):
+        """Process notifications websocket messages."""
+        if message["type"] == "create-notification":
+            data: JsonType = message["data"]["notification"]
+            if data["type"] == "user_drop_reward_reminder_notification":
+                from constants import State
+                self.twitch.change_state(State.INVENTORY_FETCH)
+                await self.twitch.gql_request(
+                    GQL_OPERATIONS["NotificationsDelete"].with_variables(
+                        {"input": {"id": data["id"]}}
+                    )
+                )
+
+    @task_wrapper
+    async def process_points(self, user_id: int, message: dict):
+        """Process points websocket messages."""
+        # Example payloads:
+        # {
+        #     "type": "points-earned",
+        #     "data": {
+        #         "timestamp": "YYYY-MM-DDTHH:MM:SS.UUUUUUUUUZ",
+        #         "channel_id": "123456789",
+        #         "point_gain": {
+        #             "user_id": "12345678",
+        #             "channel_id": "123456789",
+        #             "total_points": 10,
+        #             "baseline_points": 10,
+        #             "reason_code": "WATCH",
+        #             "multipliers": []
+        #         },
+        #         "balance": {
+        #             "user_id": "12345678",
+        #             "channel_id": "123456789",
+        #             "balance": 12345
+        #         }
+        #     }
+        # }
+        # {
+        #     "type": "claim-available",
+        #     "data": {
+        #         "timestamp":"YYYY-MM-DDTHH:MM:SS.UUUUUUUUUZ",
+        #         "claim": {
+        #             "id": "4ae6fefd-1234-40ae-ad3d-92254c576a91",
+        #             "user_id": "12345678",
+        #             "channel_id": "123456789",
+        #             "point_gain": {
+        #                 "user_id": "12345678",
+        #                 "channel_id": "123456789",
+        #                 "total_points": 50,
+        #                 "baseline_points": 50,
+        #                 "reason_code": "CLAIM",
+        #                 "multipliers": []
+        #             },
+        #             "created_at": "YYYY-MM-DDTHH:MM:SSZ"
+        #         }
+        #     }
+        # }
+        msg_type = message["type"]
+        if msg_type == "points-earned":
+            data: JsonType = message["data"]
+            channel = self.twitch.streams.channels.get(int(data["channel_id"]))
+            points: int = data["point_gain"]["total_points"]
+            balance: int = data["balance"]["balance"]
+            if channel is not None:
+                channel.points = balance
+                channel.display()
+            self.twitch.print(_("status", "earned_points").format(points=f"{points:3}", balance=balance))
+        elif msg_type == "claim-available":
+            claim_data = message["data"]["claim"]
+            points = claim_data["point_gain"]["total_points"]
+            await self.twitch.claim_points(claim_data["channel_id"], claim_data["id"])
+            self.twitch.print(_("status", "claimed_points").format(points=points))
 
 
 class Websocket:

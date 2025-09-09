@@ -12,7 +12,7 @@ from typing import Any, Dict, Literal, NewType, TYPE_CHECKING
 
 from yarl import URL
 
-from version import __version__
+from .version import __version__
 
 if TYPE_CHECKING:
     from collections import abc  # noqa

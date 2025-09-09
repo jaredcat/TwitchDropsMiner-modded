@@ -6,8 +6,8 @@ import io
 import json
 from typing import Dict, TypedDict, NewType, TYPE_CHECKING
 
-from utils import json_load, json_save
-from constants import URLType, CACHE_PATH, CACHE_DB
+from .utils import json_load, json_save
+from .constants import URLType, CACHE_PATH, CACHE_DB
 
 from PIL import Image as Image_module
 from PIL.ImageTk import PhotoImage
@@ -34,7 +34,7 @@ default_database: Hashes = {}
 
 class CurrentSeconds:
     LIFETIME = timedelta(days=7)
-    
+
     def set_current_seconds(value):
         global current_seconds
         current_seconds = value

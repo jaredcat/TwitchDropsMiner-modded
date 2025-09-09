@@ -6,17 +6,17 @@ from typing import TYPE_CHECKING
 from functools import cached_property
 from datetime import datetime, timedelta, timezone
 
-from channel import Channel
-from exceptions import GQLException
-from constants import GQL_OPERATIONS, URLType
-from utils import timestamp, invalidate_cache, Game
+from .channel import Channel
+from .exceptions import GQLException
+from .constants import GQL_OPERATIONS, URLType
+from .utils import timestamp, invalidate_cache, Game
 
 if TYPE_CHECKING:
     from collections import abc
 
-    from twitch import Twitch
-    from constants import JsonType
-    from gui import GUIManager, InventoryOverview
+    from .twitch import Twitch
+    from .constants import JsonType
+    from .gui import GUIManager, InventoryOverview
 
 
 DIMS_PATTERN = re.compile(r'-\d+x\d+(?=\.(?:jpg|png|gif)$)', re.I)

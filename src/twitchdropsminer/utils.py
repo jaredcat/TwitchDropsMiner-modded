@@ -27,9 +27,9 @@ import yarl
 from PIL.ImageTk import PhotoImage
 from PIL import Image as Image_module
 
-from constants import JsonType, IS_PACKAGED
-from exceptions import ExitRequest, ReloadRequest
-from constants import _resource_path as resource_path  # noqa
+from .constants import JsonType, IS_PACKAGED
+from .exceptions import ExitRequest, ReloadRequest
+from .constants import _resource_path as resource_path  # noqa
 
 if TYPE_CHECKING:
     from typing_extensions import ParamSpec

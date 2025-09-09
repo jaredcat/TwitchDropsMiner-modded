@@ -5,8 +5,8 @@ from typing import Any, TypedDict, TYPE_CHECKING
 
 from yarl import URL
 
-from utils import json_load, json_save
-from constants import (
+from .utils import json_load, json_save
+from .constants import (
     SETTINGS_PATH,
     DEFAULT_LANG,
     PRIORITY_ALGORITHM_LIST,
@@ -14,7 +14,7 @@ from constants import (
 )
 
 if TYPE_CHECKING:
-    from main import ParsedArgs
+    from .cli import ParsedArgs
 
 
 class SettingsFile(TypedDict):
