@@ -17,6 +17,7 @@ from tkinter.font import Font, nametofont
 from functools import partial, cached_property
 from datetime import datetime, timedelta, timezone
 from tkinter import Tk, ttk, StringVar, DoubleVar, IntVar
+import tkinter.simpledialog
 from typing import Any, Union, Tuple, TypedDict, NoReturn, Generic, TYPE_CHECKING
 
 import pystray
@@ -35,7 +36,8 @@ from cache import ImageCache
 from exceptions import ExitRequest
 from utils import resource_path, set_root_icon, webopen, Game, _T
 from constants import (
-    SELF_PATH, OUTPUT_FORMATTER, WS_TOPICS_LIMIT, MAX_WEBSOCKETS, WINDOW_TITLE, State
+    SELF_PATH, OUTPUT_FORMATTER, WS_TOPICS_LIMIT, MAX_WEBSOCKETS, WINDOW_TITLE, State,
+    PRIORITY_ALGORITHM_LIST, PRIORITY_ALGORITHM_ADAPTIVE, PRIORITY_ALGORITHM_BALANCED, PRIORITY_ALGORITHM_ENDING_SOONEST
 )
 if sys.platform == "win32":
     from registry import RegistryKey, ValueType
@@ -550,7 +552,7 @@ class LoginForm:
         self._manager.grab_attention(sound=False)
         self._manager.print(_("gui", "login", "request"))
         await self.wait_for_login_press()
-        self._manager.print(f"Enter this code on the Twitch's device activation page: {user_code}")
+        self._manager.print(_("gui", "login", "enter_code").format(user_code=user_code))
         webopen("https://www.twitch.tv/activate")
 
     def update(self, status: str, user_id: int | None):
@@ -688,7 +690,11 @@ class CampaignProgress:
         self._timer_task = None
 
     def start_timer(self):
-        self._manager.print(f"Progress: {self._drop.current_minutes}/{self._drop.required_minutes} - {self._drop.campaign}")
+        self._manager.print(_("gui", "progress", "progress_update").format(
+            current_minutes=self._drop.current_minutes,
+            required_minutes=self._drop.required_minutes,
+            campaign=self._drop.campaign
+        ))
         with open('healthcheck.timestamp', 'w') as f:
             f.write(str(int(time())))
         if self._timer_task is None:
@@ -1500,7 +1506,7 @@ class _SettingsVars(TypedDict):
     dark_theme: IntVar
     autostart: IntVar
     priority_only: IntVar
-    prioritize_by_ending_soonest: IntVar
+    priority_algorithm: StringVar
     unlinked_campaigns: IntVar
     tray_notifications: IntVar
     window_position: StringVar
@@ -1521,31 +1527,35 @@ class SettingsPanel:
             "dark_theme": IntVar(master, self._settings.dark_theme),
             "autostart": IntVar(master, self._settings.autostart),
             "priority_only": IntVar(master, self._settings.priority_only),
-            "prioritize_by_ending_soonest": IntVar(master, self._settings.prioritize_by_ending_soonest),
+            "priority_algorithm": StringVar(master, self._settings.priority_algorithm),
             "unlinked_campaigns": IntVar(master, self._settings.unlinked_campaigns),
             "tray_notifications": IntVar(master, self._settings.tray_notifications),
             "window_position": IntVar(master, self._settings.window_position),
         }
         master.rowconfigure(0, weight=1)
         master.columnconfigure(0, weight=1)
-        # use a frame to center the content within the tab
+        # use a frame to fill the content within the tab
         center_frame = ttk.Frame(master)
-        center_frame.grid(column=0, row=0)
+        center_frame.grid(column=0, row=0, sticky="nsew")
+        center_frame.rowconfigure(0, weight=1)
+        # Simple equal column layout
+        center_frame.columnconfigure(0, weight=1)
+        center_frame.columnconfigure(1, weight=1)
+        center_frame.columnconfigure(2, weight=1)
         # General section
         general_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "general", "name")
         )
         general_frame.grid(column=0, row=0, sticky="nsew")
-        # use another frame to center the options within the section
-        # NOTE: this can be adjusted or removed later on if more options were to be added
+        # use another frame to contain the options within the section
         general_frame.rowconfigure(0, weight=1)
         general_frame.columnconfigure(0, weight=1)
         center_frame2 = ttk.Frame(general_frame)
-        center_frame2.grid(column=0, row=0)
+        center_frame2.grid(column=0, row=0, sticky="nsew")
         # language frame
         language_frame = ttk.Frame(center_frame2)
         language_frame.grid(column=0, row=0)
-        ttk.Label(language_frame, text="Language 🌐 (requires restart): ").grid(column=0, row=0)
+        ttk.Label(language_frame, text=_("gui", "settings", "general", "language")).grid(column=0, row=0)
         self._select_menu = SelectMenu(
             language_frame,
             default=_.current,
@@ -1588,12 +1598,38 @@ class SettingsPanel:
         ttk.Checkbutton(
             checkboxes_frame, variable=self._vars["priority_only"], command=self.priority_only
         ).grid(column=1, row=irow, sticky="w")
-        ttk.Label(
-            checkboxes_frame, text=_("gui", "settings", "general", "prioritize_by_ending_soonest")
-        ).grid(column=0, row=(irow := irow + 1), sticky="e")
-        ttk.Checkbutton(
-            checkboxes_frame, variable=self._vars["prioritize_by_ending_soonest"], command=self.prioritize_by_ending_soonest
-        ).grid(column=1, row=irow, sticky="w")
+        # Priority algorithm selection frame
+        priority_algorithm_frame = ttk.Frame(center_frame2)
+        priority_algorithm_frame.grid(column=0, row=2)
+        ttk.Label(priority_algorithm_frame, text=_("gui", "settings", "general", "priority_algorithm")).grid(column=0, row=0, sticky="e")
+        # Map setting values to display names
+        algorithm_display_map = {
+            PRIORITY_ALGORITHM_LIST: _("gui", "settings", "general", "priority_algorithms", "list"),
+            PRIORITY_ALGORITHM_ADAPTIVE: _("gui", "settings", "general", "priority_algorithms", "adaptive"),
+            PRIORITY_ALGORITHM_BALANCED: _("gui", "settings", "general", "priority_algorithms", "balanced"),
+            PRIORITY_ALGORITHM_ENDING_SOONEST: _("gui", "settings", "general", "priority_algorithms", "ending_soonest"),
+        }
+        # Ensure we always have a valid algorithm setting and display name
+        current_algorithm = getattr(self._settings, 'priority_algorithm', PRIORITY_ALGORITHM_LIST)
+        current_algorithm_display = algorithm_display_map.get(current_algorithm,  _("gui", "settings", "general", "priority_algorithms", "list"))
+
+        # If setting is invalid, reset it to default
+        if current_algorithm not in algorithm_display_map:
+            self._settings.priority_algorithm = PRIORITY_ALGORITHM_LIST
+            current_algorithm_display = _("gui", "settings", "general", "priority_algorithms", "list")
+
+        self._priority_algorithm_menu = SelectMenu(
+            priority_algorithm_frame,
+            default=current_algorithm_display,
+            options={
+                _("gui", "settings", "general", "priority_algorithms", "list"): PRIORITY_ALGORITHM_LIST,
+                _("gui", "settings", "general", "priority_algorithms", "adaptive"): PRIORITY_ALGORITHM_ADAPTIVE,
+                _("gui", "settings", "general", "priority_algorithms", "balanced"): PRIORITY_ALGORITHM_BALANCED,
+                _("gui", "settings", "general", "priority_algorithms", "ending_soonest"): PRIORITY_ALGORITHM_ENDING_SOONEST,
+            },
+            command=self.update_priority_algorithm,
+        )
+        self._priority_algorithm_menu.grid(column=1, row=0, sticky="w")
         ttk.Label(
             checkboxes_frame, text=_("gui", "settings", "general", "unlinked_campaigns")
         ).grid(column=0, row=(irow := irow + 1), sticky="e")
@@ -1602,7 +1638,7 @@ class SettingsPanel:
         ).grid(column=1, row=irow, sticky="w")
         # proxy frame
         proxy_frame = ttk.Frame(center_frame2)
-        proxy_frame.grid(column=0, row=2)
+        proxy_frame.grid(column=0, row=3)
         ttk.Label(proxy_frame, text=_("gui", "settings", "general", "proxy")).grid(column=0, row=0)
         self._proxy = PlaceholderEntry(
             proxy_frame,
@@ -1614,7 +1650,7 @@ class SettingsPanel:
         )
         self._proxy.config(validatecommand=partial(proxy_validate, self._proxy, self._settings))
         self._proxy.grid(column=0, row=1)
-        # Priority section
+        # Priority section - with width constraint
         priority_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "priority")
         )
@@ -1638,6 +1674,27 @@ class SettingsPanel:
         )
         self._priority_list.grid(column=0, row=1, rowspan=3, sticky="nsew")
         self._priority_list.insert("end", *self._settings.priority)
+
+        # Add drag and drop functionality with visual feedback
+        self._drag_data = {"item": None, "index": None, "dragging": False}
+        self._priority_list.bind("<Button-1>", self._on_priority_drag_start)
+        self._priority_list.bind("<B1-Motion>", self._on_priority_drag_motion)
+        self._priority_list.bind("<ButtonRelease-1>", self._on_priority_drag_release)
+        self._priority_list.bind("<Leave>", self._on_priority_drag_leave)
+
+        # Add a label for drag feedback (initially hidden)
+        self._drag_feedback_label = ttk.Label(priority_frame, text="",
+                                            foreground="blue", font=("TkDefaultFont", 9, "italic"))
+        self._drag_feedback_label.grid(column=0, row=4, columnspan=2, sticky="ew")
+        self._drag_feedback_label.grid_remove()  # Hide initially
+
+        # Add right-click context menu
+        self._priority_menu = tk.Menu(self._priority_list, tearoff=0)
+        self._priority_menu.add_command(label=_("gui", "settings", "context_menu", "move_to_top"), command=lambda: self._priority_move_to_position(0))
+        self._priority_menu.add_command(label=_("gui", "settings", "context_menu", "move_to_bottom"), command=lambda: self._priority_move_to_position(-1))
+        self._priority_menu.add_separator()
+        self._priority_menu.add_command(label=_("gui", "settings", "context_menu", "move_to_position"), command=self._priority_move_to_custom_position)
+        self._priority_list.bind("<Button-3>", self._show_priority_context_menu)  # Right-click
         ttk.Button(
             priority_frame,
             width=2,
@@ -1658,7 +1715,7 @@ class SettingsPanel:
             priority_frame, text="❌", command=self.priority_delete, width=2, style="Large.TButton"
         ).grid(column=1, row=3, sticky="ns")
         priority_frame.rowconfigure(3, weight=1)
-        # Exclude section
+        # Exclude section - with width constraint
         exclude_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "exclude")
         )
@@ -1712,9 +1769,9 @@ class SettingsPanel:
     def change_theme(self):
         self._settings.dark_theme = bool(self._vars["dark_theme"].get())
         if self._settings.dark_theme:
-            set_theme(self._root, self._manager, "dark")
+            set_theme(self._root, self._manager, _("gui", "settings", "general", "dark"))
         else:
-            set_theme(self._root, self._manager,  "light")
+            set_theme(self._root, self._manager, _("gui", "settings", "general", "light"))
 
     def update_autostart(self) -> None:
         enabled = bool(self._vars["autostart"].get())
@@ -1755,8 +1812,39 @@ class SettingsPanel:
 
     def set_games(self, games: abc.Iterable[Game]) -> None:
         games_list = sorted(map(str, games))
-        self._exclude_entry.config(values=games_list)
-        self._priority_entry.config(values=games_list)
+        # Filter out games that are in the other list to prevent conflicts
+        priority_games = set(self._settings.priority)
+        exclude_games = set(self._settings.exclude)
+
+        # For exclusion dropdown, exclude games that are in priority list OR already in exclusion list
+        exclude_options = [game for game in games_list if game not in priority_games and game not in exclude_games]
+        self._exclude_entry.config(values=exclude_options)
+
+        # For priority dropdown, exclude games that are in exclusion list OR already in priority list
+        priority_options = [game for game in games_list if game not in exclude_games and game not in priority_games]
+        self._priority_entry.config(values=priority_options)
+
+    def _update_dropdown_options(self) -> None:
+        """Update dropdown options to exclude games that are in the other list or already in their own list."""
+        # Get current dropdown values
+        current_exclude_values = list(self._exclude_entry.cget("values"))
+        current_priority_values = list(self._priority_entry.cget("values"))
+
+        # Combine all available games
+        all_games = sorted(set(current_exclude_values + current_priority_values +
+                             list(self._settings.priority) + list(self._settings.exclude)))
+
+        # Filter out games that are in the other list or already in their own list
+        priority_games = set(self._settings.priority)
+        exclude_games = set(self._settings.exclude)
+
+        # For exclusion dropdown, exclude games that are in priority list OR already in exclusion list
+        exclude_options = [game for game in all_games if game not in priority_games and game not in exclude_games]
+        self._exclude_entry.config(values=exclude_options)
+
+        # For priority dropdown, exclude games that are in exclusion list OR already in priority list
+        priority_options = [game for game in all_games if game not in exclude_games and game not in priority_games]
+        self._priority_entry.config(values=priority_options)
 
     def priorities(self) -> dict[str, int]:
         # NOTE: we shift the indexes so that 0 can be used as the default one
@@ -1780,6 +1868,8 @@ class SettingsPanel:
             self._priority_list.see("end")
             self._settings.priority.append(game_name)
             self._settings.alter()
+            # Update dropdown options to reflect the change
+            self._update_dropdown_options()
         else:
             # already there, set the selection on it
             self._priority_list.selection_set(existing_idx)
@@ -1792,9 +1882,11 @@ class SettingsPanel:
         return selection[0]
 
     def priority_move(self, up: bool) -> None:
-        idx: int | None = self._priority_idx()
-        if idx is None:
+        current_selection = list(self._priority_list.curselection())
+        if not current_selection:
             return
+
+        idx = current_selection[0]
         if up and idx == 0 or not up and idx == self._priority_list.size() - 1:
             return
         swap_idx: int = idx - 1 if up else idx + 1
@@ -1809,18 +1901,24 @@ class SettingsPanel:
         self._settings.alter()
 
     def priority_delete(self) -> None:
-        idx: int | None = self._priority_idx()
-        if idx is None:
+        current_selection = list(self._priority_list.curselection())
+        if not current_selection:
             return
-        self._priority_list.delete(idx)
-        del self._settings.priority[idx]
+
+        idx = current_selection[0]
+        if idx < len(self._settings.priority):
+            self._priority_list.delete(idx)
+            del self._settings.priority[idx]
+
         self._settings.alter()
+        # Update dropdown options to reflect the change
+        self._update_dropdown_options()
 
     def priority_only(self) -> None:
         self._settings.priority_only = bool(self._vars["priority_only"].get())
 
-    def prioritize_by_ending_soonest(self) -> None:
-        self._settings.prioritize_by_ending_soonest = bool(self._vars["prioritize_by_ending_soonest"].get())
+    def update_priority_algorithm(self, algorithm: str) -> None:
+        self._settings.priority_algorithm = algorithm
 
     def unlinked_campaigns(self) -> None:
         self._settings.unlinked_campaigns = bool(self._vars["unlinked_campaigns"].get())
@@ -1844,6 +1942,8 @@ class SettingsPanel:
             else:
                 self._exclude_list.insert("end", game_name)
                 self._exclude_list.see("end")
+            # Update dropdown options to reflect the change
+            self._update_dropdown_options()
         else:
             # it was already there, select it
             for i, item in enumerate(self._exclude_list.get(0, "end")):
@@ -1866,6 +1966,191 @@ class SettingsPanel:
             self._settings.exclude.discard(item)
             self._settings.alter()
             self._exclude_list.delete(idx)
+            # Update dropdown options to reflect the change
+            self._update_dropdown_options()
+
+    # Drag and drop methods for priority list with enhanced visual feedback
+    def _on_priority_drag_start(self, event):
+        """Start drag operation - record the item being dragged."""
+        widget = event.widget
+        clicked_index = widget.nearest(event.y)
+
+        if clicked_index < widget.size():
+            # Select the clicked item
+            widget.selection_clear(0, "end")
+            widget.selection_set(clicked_index)
+
+            # Store drag data for the single item
+            self._drag_data["index"] = clicked_index
+            self._drag_data["item"] = widget.get(clicked_index)
+            self._drag_data["dragging"] = False
+
+            # Configure drag source appearance
+            widget.configure(cursor="hand2")
+
+
+    def _on_priority_drag_motion(self, event):
+        """Handle drag motion - provide rich visual feedback."""
+        widget = event.widget
+        current_index = widget.nearest(event.y)
+
+        # Only handle motion if we have drag data
+        if self._drag_data["item"]:
+            # Mark that we're actively dragging
+            if not self._drag_data["dragging"]:
+                self._drag_data["dragging"] = True
+                widget.configure(cursor="exchange")
+                # Show drag feedback
+                feedback_text =  _("gui", "settings", "general", "dragging").format(
+                    item=self._drag_data['item']
+                )
+                self._drag_feedback_label.config(text=feedback_text)
+                self._drag_feedback_label.grid()
+
+            # Clear all previous selections and highlights
+            widget.selection_clear(0, "end")
+
+            # Highlight the source item being dragged
+            widget.selection_set(self._drag_data["index"])
+
+            # Highlight the current drop target position if it's different from source
+            if current_index < widget.size() and current_index != self._drag_data["index"]:
+                widget.selection_set(current_index)
+
+    def _on_priority_drag_release(self, event):
+        """Complete drag operation - move the items to new position."""
+        widget = event.widget
+        drop_index = widget.nearest(event.y)
+
+        # Reset cursor
+        widget.configure(cursor="")
+
+        # Only move if we were actually dragging and it's a valid move
+        if (self._drag_data["dragging"] and
+            self._drag_data["item"] and
+            drop_index < widget.size() and
+            drop_index != self._drag_data["index"]):
+
+            # Perform the single-item move operation
+            self._priority_move_item(self._drag_data["index"], drop_index)
+        else:
+            # Just clean up selection if no move occurred
+            widget.selection_clear(0, "end")
+            if self._drag_data["index"] is not None and self._drag_data["index"] < widget.size():
+                widget.selection_set(self._drag_data["index"])
+
+        # Clear drag data and hide feedback
+        self._drag_data = {"item": None, "index": None, "dragging": False}
+        self._drag_feedback_label.grid_remove()
+
+    def _on_priority_drag_leave(self, event):
+        """Handle when mouse leaves the listbox during drag."""
+        widget = event.widget
+        if self._drag_data["dragging"]:
+            # Reset cursor and clear highlights when leaving
+            widget.configure(cursor="no")
+            widget.selection_clear(0, "end")
+            # Keep only the source item selected
+            if self._drag_data["index"] is not None and self._drag_data["index"] < widget.size():
+                widget.selection_set(self._drag_data["index"])
+            # Update feedback to show invalid drop zone
+            self._drag_feedback_label.config(text="❌ Invalid drop zone - return to list")
+
+    def _priority_move_item(self, from_index: int, to_index: int):
+        """Move an item from one position to another in the priority list."""
+        if from_index == to_index:
+            return
+
+        # Get the item being moved
+        item = self._priority_list.get(from_index)
+
+        # Remove from old position
+        self._priority_list.delete(from_index)
+        self._settings.priority.pop(from_index)
+
+        # Insert at new position
+        self._priority_list.insert(to_index, item)
+        self._settings.priority.insert(to_index, item)
+
+        # Update selection and ensure visibility
+        self._priority_list.selection_clear(0, "end")
+        self._priority_list.selection_set(to_index)
+        self._priority_list.see(to_index)
+
+        # Save changes
+        self._settings.alter()
+
+
+    # Context menu methods for priority list
+    def _show_priority_context_menu(self, event):
+        """Show the right-click context menu for priority list."""
+        widget = event.widget
+        index = widget.nearest(event.y)
+        if index < widget.size():
+            # Select the clicked item
+            widget.selection_clear(0, "end")
+            widget.selection_set(index)
+            # Show context menu
+            try:
+                self._priority_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                self._priority_menu.grab_release()
+
+    def _priority_move_to_position(self, position: int):
+        """Move selected item to a specific position (0=top, -1=bottom)."""
+        current_selection = list(self._priority_list.curselection())
+        if not current_selection:
+            return
+
+        list_size = self._priority_list.size()
+        if position == -1:  # Move to bottom
+            target_idx = list_size - 1
+        else:  # Move to specific position
+            target_idx = max(0, min(position, list_size - 1))
+
+        self._priority_move_item(current_selection[0], target_idx)
+
+    def _priority_move_by_offset(self, offset: int):
+        """Move selected item by a relative offset (negative=up, positive=down)."""
+        current_selection = list(self._priority_list.curselection())
+        if not current_selection:
+            return
+
+        current_idx = current_selection[0]
+        new_idx = current_idx + offset
+        list_size = self._priority_list.size()
+        target_idx = max(0, min(new_idx, list_size - 1))
+
+        if target_idx != current_idx:
+            self._priority_move_item(current_idx, target_idx)
+
+    def _priority_move_to_custom_position(self):
+        """Show dialog to move item to a custom position."""
+        current_selection = list(self._priority_list.curselection())
+        if not current_selection:
+            return
+
+        list_size = self._priority_list.size()
+        current_idx = current_selection[0]
+
+        # Create a simple dialog for position input
+        prompt = _("gui", "settings", "context_menu", "enter_position").format(
+            list_size=list_size
+        )
+        initial_value = current_idx + 1
+
+        position = tkinter.simpledialog.askinteger(
+            _("gui", "settings", "context_menu", "move_to_position"),
+            prompt,
+            minvalue=1,
+            maxvalue=list_size,
+            initialvalue=initial_value
+        )
+
+        if position is not None:
+            # Convert from 1-based to 0-based indexing
+            target_idx = position - 1
+            self._priority_move_item(current_idx, target_idx)
 
 
 class HelpTab:
@@ -2046,7 +2331,34 @@ class GUIManager:
         self.tabs.add_tab(help_frame, name=_("gui", "tabs", "help"))
         # clamp minimum window size (update geometry first)
         root.update_idletasks()
-        root.minsize(width=root.winfo_reqwidth(), height=root.winfo_reqheight())
+        min_width = root.winfo_reqwidth()
+        min_height = root.winfo_reqheight()
+        root.minsize(width=min_width, height=min_height)
+
+        # Set dynamic height based on screen size for better Settings tab experience
+        screen_height = root.winfo_screenheight()
+        # Use 80% of screen height but ensure it's at least the minimum required height
+        dynamic_height = max(min_height, int(screen_height * 0.8))
+
+        # Apply dynamic height adjustment - either new window or expand existing window height
+        if not self._twitch.settings.window_position:
+            # New window - set default size with dynamic height
+            root.geometry(f"{min_width}x{dynamic_height}")
+            self._twitch.settings.window_position = root.geometry()
+        else:
+            # Existing window - parse current geometry and apply dynamic height if beneficial
+            current_geom = self._twitch.settings.window_position
+            if 'x' in current_geom and '+' in current_geom:
+                # Parse geometry string like "940x690+3203+345"
+                size_part = current_geom.split('+')[0]  # "940x690"
+                position_part = current_geom[len(size_part):]  # "+3203+345"
+                if 'x' in size_part:
+                    current_width, current_height = map(int, size_part.split('x'))
+                    # Use dynamic height if it's larger than current height
+                    new_height = max(current_height, dynamic_height)
+                    new_geometry = f"{current_width}x{new_height}{position_part}"
+                    root.geometry(new_geometry)
+                    self._twitch.settings.window_position = new_geometry
         # register logging handler
         self._handler = _TKOutputHandler(self)
         self._handler.setFormatter(OUTPUT_FORMATTER)

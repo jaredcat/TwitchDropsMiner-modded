@@ -68,7 +68,8 @@
             "username": "Username",
             "password": "Password",
             "twofa_code": "2FA code (optional)",
-            "button": "Login"
+            "button": "Login",
+            "enter_code": "Enter this code on the Twitch's device activation page: {user_code}"
         },
         "websocket": {
             "name": "Websocket Status",
@@ -87,7 +88,8 @@
             "campaign": "Campaign:",
             "remaining": "{time} remaining",
             "drop_progress": "Progress:",
-            "campaign_progress": "Progress:"
+            "campaign_progress": "Progress:",
+            "progress_update": "Progress: {current_minutes}/{required_minutes} - {campaign}"
         },
         "channels": {
             "name": "Channels",
@@ -135,20 +137,37 @@
         "settings": {
             "general": {
                 "name": "General",
+                "language": "Language 🌐 (requires restart): ",
                 "dark_theme": "Dark theme: ",
+                "dark": "dark",
+                "light": "light",
                 "autostart": "Autostart: ",
                 "tray": "Autostart into tray: ",
                 "tray_notifications": "Tray notifications: ",
                 "priority_only": "Priority Only: ",
                 "prioritize_by_ending_soonest": "Prioritize by ending soonest: ",
                 "unlinked_campaigns": "Allow Unlinked Campaigns: ",
-                "proxy": "Proxy (requires restart):"
+                "proxy": "Proxy (requires restart):",
+                "priority_algorithm": "Priority Algorithm: ",
+                "priority_algorithms": {
+                    "list": "Priority List",
+                    "adaptive": "Adaptive Priority",
+                    "balanced": "Balanced Priority",
+                    "ending_soonest": "Ending Soonest"
+                }
             },
             "game_name": "Game name",
             "priority": "Priority",
             "exclude": "Exclude",
             "reload": "Reload",
-            "reload_text": "Most changes require a reload to take an immediate effect: "
+            "reload_text": "Most changes require a reload to take an immediate effect: ",
+            "dragging": "📦 Dragging: {item}",
+            "context_menu": {
+                "move_to_top": "Move to Top",
+                "move_to_bottom": "Move to Bottom",
+                "move_to_position": "Move to Position...",
+                "enter_position": "Enter position (1-{list_size}):"
+            }
         },
         "help": {
             "links": {
