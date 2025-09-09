@@ -43,7 +43,7 @@ class StreamsManager:
     def __init__(self, twitch: Twitch):
         self.twitch = twitch
         self.channels: OrderedDict[int, Channel] = OrderedDict()
-        self.watching_channel = self.twitch.watching_channel
+        self.watching_channel: Channel | None = None
         self._watching_task: asyncio.Task[None] | None = None
         self._watching_restart = asyncio.Event()
         self._drop_update: asyncio.Future[bool] | None = None

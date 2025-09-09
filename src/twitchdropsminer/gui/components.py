@@ -754,8 +754,7 @@ class TrayIcon:
         self._button = ttk.Button(master, command=self.minimize, text=_("gui", "tray", "minimize"))
         self._button.grid(column=0, row=0, sticky="ne")
         self.always_show_icon = True        # Ensure there is a way to restore the window position, in case it's shown off-screen (e.g. Second monitor)
-        if self.always_show_icon:
-            self._start()
+        self._started = False
 
     def __del__(self) -> None:
         self.stop()
@@ -791,6 +790,12 @@ class TrayIcon:
                     f"{drop.progress:.1%} ({campaign.claimed_drops}/{campaign.total_drops})"
                 )
         return title
+
+    def start(self):
+        """Start the tray icon (deferred until event loop is running)."""
+        if not self._started and self.always_show_icon:
+            self._start()
+            self._started = True
 
     def _start(self):
         loop = asyncio.get_running_loop()

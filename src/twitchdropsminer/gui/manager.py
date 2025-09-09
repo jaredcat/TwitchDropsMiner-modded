@@ -217,11 +217,6 @@ class GUIManager:
         else:
             self._root.after_idle(self._root.deiconify)
 
-        if self._twitch.settings.dark_theme:
-            set_theme(root, self, "dark")
-        else:
-            set_theme(root, self, "default")
-
     # https://stackoverflow.com/questions/56329342/tkinter-treeview-background-tag-not-working
     def _fixed_map(self, option):
         # Fix for setting text colour for Tkinter 8.6.9
@@ -282,6 +277,13 @@ class GUIManager:
     def start(self):
         if self._poll_task is None:
             self._poll_task = asyncio.create_task(self._poll())
+        # Start the tray icon now that we have an event loop
+        self.tray.start()
+        # Set theme after GUI is fully initialized
+        if self._twitch.settings.dark_theme:
+            set_theme(self._root, self, "dark")
+        else:
+            set_theme(self._root, self, "default")
         # self.progress.start_timer()
 
     def stop(self):
@@ -375,10 +377,16 @@ def set_theme(root, manager, name):
     link_font.config(underline=True)
 
     def configure_combobox_list(combobox, flag, value):
-                combobox.update_idletasks()
-                popdown_window = combobox.tk.call("ttk::combobox::PopdownWindow", combobox)
-                listbox = f"{popdown_window}.f.l"
+        try:
+            combobox.update_idletasks()
+            popdown_window = combobox.tk.call("ttk::combobox::PopdownWindow", combobox)
+            listbox = f"{popdown_window}.f.l"
+            # Check if the listbox exists before trying to configure it
+            if combobox.tk.call("winfo", "exists", listbox):
                 combobox.tk.call(listbox, "configure", flag, value)
+        except tk.TclError:
+            # Combobox popdown doesn't exist yet, skip
+            pass
 
     # Style options, !!!"background" and "bg" is not interchangable for some reason!!!
     if name == "dark":
