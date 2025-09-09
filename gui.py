@@ -552,7 +552,7 @@ class LoginForm:
         self._manager.grab_attention(sound=False)
         self._manager.print(_("gui", "login", "request"))
         await self.wait_for_login_press()
-        self._manager.print(f"Enter this code on the Twitch's device activation page: {user_code}")
+        self._manager.print(_("gui", "login", "enter_code").format(user_code=user_code))
         webopen("https://www.twitch.tv/activate")
 
     def update(self, status: str, user_id: int | None):
@@ -690,7 +690,11 @@ class CampaignProgress:
         self._timer_task = None
 
     def start_timer(self):
-        self._manager.print(f"Progress: {self._drop.current_minutes}/{self._drop.required_minutes} - {self._drop.campaign}")
+        self._manager.print(_("gui", "progress", "progress_update").format(
+            current_minutes=self._drop.current_minutes,
+            required_minutes=self._drop.required_minutes,
+            campaign=self._drop.campaign
+        ))
         with open('healthcheck.timestamp', 'w') as f:
             f.write(str(int(time())))
         if self._timer_task is None:
@@ -1551,7 +1555,7 @@ class SettingsPanel:
         # language frame
         language_frame = ttk.Frame(center_frame2)
         language_frame.grid(column=0, row=0)
-        ttk.Label(language_frame, text="Language 🌐 (requires restart): ").grid(column=0, row=0)
+        ttk.Label(language_frame, text=_("gui", "settings", "general", "language")).grid(column=0, row=0)
         self._select_menu = SelectMenu(
             language_frame,
             default=_.current,
@@ -1597,31 +1601,31 @@ class SettingsPanel:
         # Priority algorithm selection frame
         priority_algorithm_frame = ttk.Frame(center_frame2)
         priority_algorithm_frame.grid(column=0, row=2)
-        ttk.Label(priority_algorithm_frame, text="Priority Algorithm: ").grid(column=0, row=0, sticky="e")
+        ttk.Label(priority_algorithm_frame, text=_("gui", "settings", "general", "priority_algorithm")).grid(column=0, row=0, sticky="e")
         # Map setting values to display names
         algorithm_display_map = {
-            PRIORITY_ALGORITHM_LIST: "Priority List",
-            PRIORITY_ALGORITHM_ADAPTIVE: "Adaptive Priority",
-            PRIORITY_ALGORITHM_BALANCED: "Balanced Priority",
-            PRIORITY_ALGORITHM_ENDING_SOONEST: "Ending Soonest",
+            PRIORITY_ALGORITHM_LIST: _("gui", "settings", "general", "priority_algorithms", "list"),
+            PRIORITY_ALGORITHM_ADAPTIVE: _("gui", "settings", "general", "priority_algorithms", "adaptive"),
+            PRIORITY_ALGORITHM_BALANCED: _("gui", "settings", "general", "priority_algorithms", "balanced"),
+            PRIORITY_ALGORITHM_ENDING_SOONEST: _("gui", "settings", "general", "priority_algorithms", "ending_soonest"),
         }
         # Ensure we always have a valid algorithm setting and display name
         current_algorithm = getattr(self._settings, 'priority_algorithm', PRIORITY_ALGORITHM_LIST)
-        current_algorithm_display = algorithm_display_map.get(current_algorithm, "Priority List")
+        current_algorithm_display = algorithm_display_map.get(current_algorithm,  _("gui", "settings", "general", "priority_algorithms", "list"))
 
         # If setting is invalid, reset it to default
         if current_algorithm not in algorithm_display_map:
             self._settings.priority_algorithm = PRIORITY_ALGORITHM_LIST
-            current_algorithm_display = "Priority List"
+            current_algorithm_display = _("gui", "settings", "general", "priority_algorithms", "list")
 
         self._priority_algorithm_menu = SelectMenu(
             priority_algorithm_frame,
             default=current_algorithm_display,
             options={
-                "Priority List": PRIORITY_ALGORITHM_LIST,
-                "Adaptive Priority": PRIORITY_ALGORITHM_ADAPTIVE,
-                "Balanced Priority": PRIORITY_ALGORITHM_BALANCED,
-                "Ending Soonest": PRIORITY_ALGORITHM_ENDING_SOONEST,
+                _("gui", "settings", "general", "priority_algorithms", "list"): PRIORITY_ALGORITHM_LIST,
+                _("gui", "settings", "general", "priority_algorithms", "adaptive"): PRIORITY_ALGORITHM_ADAPTIVE,
+                _("gui", "settings", "general", "priority_algorithms", "balanced"): PRIORITY_ALGORITHM_BALANCED,
+                _("gui", "settings", "general", "priority_algorithms", "ending_soonest"): PRIORITY_ALGORITHM_ENDING_SOONEST,
             },
             command=self.update_priority_algorithm,
         )
@@ -1686,10 +1690,10 @@ class SettingsPanel:
 
         # Add right-click context menu
         self._priority_menu = tk.Menu(self._priority_list, tearoff=0)
-        self._priority_menu.add_command(label="Move to Top", command=lambda: self._priority_move_to_position(0))
-        self._priority_menu.add_command(label="Move to Bottom", command=lambda: self._priority_move_to_position(-1))
+        self._priority_menu.add_command(label=_("gui", "settings", "context_menu", "move_to_top"), command=lambda: self._priority_move_to_position(0))
+        self._priority_menu.add_command(label=_("gui", "settings", "context_menu", "move_to_bottom"), command=lambda: self._priority_move_to_position(-1))
         self._priority_menu.add_separator()
-        self._priority_menu.add_command(label="Move to Position...", command=self._priority_move_to_custom_position)
+        self._priority_menu.add_command(label=_("gui", "settings", "context_menu", "move_to_position"), command=self._priority_move_to_custom_position)
         self._priority_list.bind("<Button-3>", self._show_priority_context_menu)  # Right-click
         ttk.Button(
             priority_frame,
@@ -1765,9 +1769,9 @@ class SettingsPanel:
     def change_theme(self):
         self._settings.dark_theme = bool(self._vars["dark_theme"].get())
         if self._settings.dark_theme:
-            set_theme(self._root, self._manager, "dark")
+            set_theme(self._root, self._manager, _("gui", "settings", "general", "dark"))
         else:
-            set_theme(self._root, self._manager,  "light")
+            set_theme(self._root, self._manager, _("gui", "settings", "general", "light"))
 
     def update_autostart(self) -> None:
         enabled = bool(self._vars["autostart"].get())
@@ -1997,7 +2001,9 @@ class SettingsPanel:
                 self._drag_data["dragging"] = True
                 widget.configure(cursor="exchange")
                 # Show drag feedback
-                feedback_text = f"📦 Dragging: {self._drag_data['item']}"
+                feedback_text =  _("gui", "settings", "general", "dragging").format(
+                    item=self._drag_data['item']
+                )
                 self._drag_feedback_label.config(text=feedback_text)
                 self._drag_feedback_label.grid()
 
@@ -2128,11 +2134,13 @@ class SettingsPanel:
         current_idx = current_selection[0]
 
         # Create a simple dialog for position input
-        prompt = f"Enter position (1-{list_size}):"
+        prompt = _("gui", "settings", "context_menu", "enter_position").format(
+            list_size=list_size
+        )
         initial_value = current_idx + 1
 
         position = tkinter.simpledialog.askinteger(
-            "Move to Position",
+            _("gui", "settings", "context_menu", "move_to_position"),
             prompt,
             minvalue=1,
             maxvalue=list_size,
