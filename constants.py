@@ -11,6 +11,7 @@ from datetime import timedelta
 from typing import Any, Dict, Literal, NewType, TYPE_CHECKING
 
 from yarl import URL
+from fake_useragent import UserAgent
 
 from version import __version__
 
@@ -134,77 +135,64 @@ OUTPUT_FORMATTER = logging.Formatter("{levelname}: {message}", style='{', datefm
 
 
 class ClientInfo:
-    def __init__(self, client_url: URL, client_id: str, user_agents: str | list[str]) -> None:
+    def __init__(self, client_url: URL, client_id: str, browser_type: str = None) -> None:
         self.CLIENT_URL: URL = client_url
         self.CLIENT_ID: str = client_id
-        self.USER_AGENT: str
-        if isinstance(user_agents, list):
-            self.USER_AGENT = random.choice(user_agents)
-        else:
-            self.USER_AGENT = user_agents
+        self.USER_AGENT: str = self._get_user_agent(browser_type)
+
+    def _get_user_agent(self, browser_type: str = None) -> str:
+        """Get a random user agent using fake-useragent"""
+        try:
+            ua = UserAgent()
+            if browser_type:
+                browser_type_lower = browser_type.lower()
+                if browser_type_lower == 'chrome':
+                    return ua.chrome
+                elif browser_type_lower == 'firefox':
+                    return ua.firefox
+                elif browser_type_lower == 'safari':
+                    return ua.safari
+                elif browser_type_lower == 'edge':
+                    return ua.edge
+                elif browser_type_lower == 'opera':
+                    return ua.opera
+                else:
+                    # For unknown browser types, use random
+                    return ua.random
+            else:
+                return ua.random
+        except Exception:
+            # Fallback to a default user agent if fake-useragent fails
+            return (
+                "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+            )
 
     def __iter__(self):
         return iter((self.CLIENT_URL, self.CLIENT_ID, self.USER_AGENT))
 
 
 class ClientType:
+
     WEB = ClientInfo(
         URL("https://www.twitch.tv"),
         "kimne78kx3ncx6brgo4mv6wki5h1ko",
-        (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
-        ),
+        "chrome"  # Use Chrome user agents for web client
     )
     MOBILE_WEB = ClientInfo(
         URL("https://m.twitch.tv"),
         "r8s4dac0uhzifbpu9sjdiwzctle17ff",
-        [
-            (
-                "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/119.0.6045.66 Mobile Safari/537.36"
-            ),
-            (
-                "Mozilla/5.0 (Linux; Android 13; SM-A205U) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/119.0.6045.66 Mobile Safari/537.36"
-            ),
-            (
-                "Mozilla/5.0 (Linux; Android 13; SM-A102U) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/119.0.6045.66 Mobile Safari/537.36"
-            ),
-            (
-                "Mozilla/5.0 (Linux; Android 13; SM-G960U) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/119.0.6045.66 Mobile Safari/537.36"
-            ),
-            (
-                "Mozilla/5.0 (Linux; Android 13; SM-N960U) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/119.0.6045.66 Mobile Safari/537.36"
-            ),
-            (
-                "Mozilla/5.0 (Linux; Android 13; LM-Q720) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/119.0.6045.66 Mobile Safari/537.36"
-            ),
-            (
-                "Mozilla/5.0 (Linux; Android 13; LM-X420) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/119.0.6045.66 Mobile Safari/537.36"
-            ),
-        ]
+        "chrome"  # Use Chrome mobile user agents for mobile web client
     )
     ANDROID_APP = ClientInfo(
         URL("https://www.twitch.tv"),
         "kd1unb4b3q4t58fwlpcbzcbnm76a8fp",
-        (
-            "Dalvik/2.1.0 (Linux; U; Android 7.1.2; SM-G977N Build/LMY48Z) "
-            "tv.twitch.android.app/16.8.1/1608010"
-        ),
+        None  # Use random user agents for Android app (fallback to default)
     )
     SMARTBOX = ClientInfo(
         URL("https://android.tv.twitch.tv"),
         "ue6666qo983tsx6so1t0vnawi233wa",
-        (
-            "Mozilla/5.0 (Linux; Android 7.1; Smart Box C1) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
-        ),
+        "chrome"  # Use Chrome user agents for smart box
     )
 
 
